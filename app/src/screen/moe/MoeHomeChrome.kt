@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
-import com.github.yumeyucca.yumebox.presentation.icon.yume.Repeat
+import com.github.yumeyucca.yumebox.presentation.icon.yume.Settings2
 import com.github.yumeyucca.yumebox.presentation.theme.AnimationSpecs
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze
@@ -234,7 +234,8 @@ private fun MoeLaunchConfigButton(surfaceColor: Color, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Yume.Repeat,
+            // KimiNoBox: settings glyph; the loop arrow read as "reconnect"
+            imageVector = Yume.Settings2,
             contentDescription = null,
             tint = contentColor,
             modifier = Modifier.size(MoeUi.Button.iconSize),
