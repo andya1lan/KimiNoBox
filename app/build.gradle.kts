@@ -319,7 +319,8 @@ android {
     namespace = gropify.project.namespace.base
 
     defaultConfig {
-        applicationId = gropify.project.namespace.base
+        // KimiNoBox: own application id so the fork installs next to upstream YumeBox
+        applicationId = "io.github.andya1lan.kiminobox"
         targetSdk = gropify.android.targetSdk
         versionCode = appVersionCode
         versionName = appVersionName

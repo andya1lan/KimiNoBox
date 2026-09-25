@@ -6,8 +6,11 @@
         android:shortcutId="start_clash"
         android:shortcutLongLabel="@string/shortcut_start_clash_long"
         android:shortcutShortLabel="@string/shortcut_start_clash_short">
+        <!-- KimiNoBox: explicit target so the shortcut never resolves to upstream YumeBox -->
         <intent
-            android:action="com.github.yumeyucca.yumebox.action.START_CLASH"/>
+            android:action="com.github.yumeyucca.yumebox.action.START_CLASH"
+            android:targetClass="com.github.yumeyucca.yumebox.MainActivity"
+            android:targetPackage="io.github.andya1lan.kiminobox"/>
     </shortcut>
 
     <shortcut
@@ -16,7 +19,10 @@
         android:shortcutId="stop_clash"
         android:shortcutLongLabel="@string/shortcut_stop_clash_long"
         android:shortcutShortLabel="@string/shortcut_stop_clash_short">
+        <!-- KimiNoBox: explicit target so the shortcut never resolves to upstream YumeBox -->
         <intent
-            android:action="com.github.yumeyucca.yumebox.action.STOP_CLASH"/>
+            android:action="com.github.yumeyucca.yumebox.action.STOP_CLASH"
+            android:targetClass="com.github.yumeyucca.yumebox.MainActivity"
+            android:targetPackage="io.github.andya1lan.kiminobox"/>
     </shortcut>
 </shortcuts>
