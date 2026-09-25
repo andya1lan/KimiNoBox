@@ -147,6 +147,8 @@ object ProfileProcessor {
                     check(stagedConfig.isFile && stagedConfig.length() > 0L) {
                         "Profile update produced no config.yaml: ${snapshot.imported.uuid}"
                     }
+                    // KimiNoBox: refuse the content whose last start failed (B4)
+                    ProfileVersions.rejectKnownBad(context, snapshot.imported.uuid, stagedConfig)
 
                     profileLock.withLock {
                         if (ImportedDao.exists(snapshot.imported.uuid)) {
@@ -232,6 +234,7 @@ object ProfileProcessor {
 
                 val imported = context.importedDir.resolve(uuid.toString())
                 imported.deleteRecursively()
+                ProfileVersions.forget(context, uuid) // KimiNoBox: its version state and LKG copy
 
                 context.sendProfileChanged(uuid, affectsRuntime = affectsRuntime)
             }

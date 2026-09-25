@@ -35,6 +35,7 @@ import com.github.yumeyucca.yumebox.runtime.api.RuntimeSnapshot
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
 import com.github.yumeyucca.yumebox.runtime.service.log.RuntimeLog
 import com.github.yumeyucca.yumebox.runtime.service.notification.ServiceNotificationManager
+import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileVersions
 import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeHost
 import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeSpec
 import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeTransport
@@ -219,7 +220,9 @@ class RuntimeForegroundController(
                         "create done profile=${spec.profileUuid} " +
                             "overrides=${spec.overrideSpecs.size}",
                     )
+                    val activation = ProfileVersions.beginActivation(spec) // KimiNoBox: B5
                     val result = runtime!!.start(spec)
+                    ProfileVersions.finishActivation(service, activation, result, runtime!!.snapshot()) // KimiNoBox
                     check(result.success) {
                         result.error ?: "${label.lowercase()} runtime start failed"
                     }
@@ -407,7 +410,9 @@ class RuntimeForegroundController(
                     "overrides=${spec.overrideSpecs.size}",
             )
 
+            val activation = ProfileVersions.beginActivation(spec) // KimiNoBox: B5
             val result = runtime!!.reload(spec)
+            ProfileVersions.finishActivation(service, activation, result, runtime!!.snapshot()) // KimiNoBox
             if (result.success) {
                 runtimeLog.i(RuntimeLog.Type.Reload, "success profile=${spec.profileUuid}")
             } else {
