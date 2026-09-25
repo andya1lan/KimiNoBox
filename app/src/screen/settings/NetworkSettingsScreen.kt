@@ -95,36 +95,7 @@ fun NetworkSettingsScreen(navigator: Navigator) {
                         enabled = true,
                         onSelect = { viewModel.onRunModeChange(RunMode.VpnService) },
                     )
-                    ModeCard(
-                        icon = Yume.Tun,
-                        title = YumeTxt.NetworkSettings.RunMode.TunTitle,
-                        summary = YumeTxt.NetworkSettings.RunMode.TunSummary,
-                        selected = runMode == RunMode.Tun,
-                        enabled = rootAvailable,
-                        onSelect = { viewModel.onRunModeChange(RunMode.Tun) },
-                    )
-                    AnimatedVisibility(
-                        visible = ebpfAvailable,
-                        enter =
-                            expandVertically(
-                                animationSpec = tween(220),
-                                expandFrom = Alignment.Top,
-                            ) + fadeIn(tween(180)),
-                        exit =
-                            shrinkVertically(
-                                animationSpec = tween(180),
-                                shrinkTowards = Alignment.Top,
-                            ) + fadeOut(tween(120)),
-                    ) {
-                        ModeCard(
-                            icon = Yume.CPU,
-                            title = YumeTxt.NetworkSettings.RunMode.EbpfTitle,
-                            summary = YumeTxt.NetworkSettings.RunMode.EbpfSummary,
-                            selected = runMode == RunMode.Ebpf,
-                            enabled = rootAvailable,
-                            onSelect = { viewModel.onRunModeChange(RunMode.Ebpf) },
-                        )
-                    }
+                    // KimiNoBox: VPN Service only; the TUN and eBPF (root) cards are hidden
                 }
             }
             item {
@@ -148,37 +119,7 @@ fun NetworkSettingsScreen(navigator: Navigator) {
                     )
                 }
             }
-            item {
-                Title(YumeTxt.NetworkSettings.Section.Kernel)
-                AppCard {
-                    val installedKernelIds = kernels
-                        .filter { KernelManager.isInstalled(context, it.id) }
-                        .map { it.id }
-                    val locallyInstalledKernelIds = KernelManager.installedKernelIds(context)
-                    val kernelIds = listOf("bundled-alpha") +
-                        (locallyInstalledKernelIds + installedKernelIds).distinct()
-                    WindowDropdownPreference(
-                        title = YumeTxt.NetworkSettings.Kernel.ActiveTitle,
-                        summary = null,
-                        items = kernelIds.map { id ->
-                            kernelLabel(id, screen.installedKernelCommits[id])
-                        },
-                        selectedIndex = kernelIds.indexOf(screen.activeKernelId).coerceAtLeast(0),
-                        enabled = !screen.kernelBusy,
-                        onSelectedIndexChange = { viewModel.selectKernel(kernelIds[it]) },
-                    )
-                    PreferenceArrowItem(
-                        title = YumeTxt.NetworkSettings.Kernel.RefreshTitle,
-                        summary = null,
-                        onClick = { showKernelDialog = true },
-                    )
-                    PreferenceArrowItem(
-                        title = YumeTxt.NetworkSettings.Kernel.CustomTitle,
-                        summary = null,
-                        onClick = { showCustomKernelDialog = true },
-                    )
-                }
-            }
+            // KimiNoBox: kernel selection/download section removed; the core is locked
             item {
                 Title(YumeTxt.NetworkSettings.Section.ProxyOptions)
                 AppCard {
@@ -201,34 +142,7 @@ fun NetworkSettingsScreen(navigator: Navigator) {
                 }
             }
         }
-
-        KernelSelectionDialog(
-            show = showKernelDialog,
-            screen = screen,
-            onRefresh = viewModel::refreshKernels,
-            onDownload = { ids ->
-                viewModel.downloadKernels(ids) { success ->
-                    if (success) showKernelDialog = false
-                }
-            },
-            onDismiss = { showKernelDialog = false },
-        )
-
-        CustomKernelSheet(
-            show = showCustomKernelDialog,
-            busy = screen.kernelBusy,
-            onInstallUrl = { url ->
-                viewModel.installCustomPluginUrl(url) { success ->
-                    if (success) showCustomKernelDialog = false
-                }
-            },
-            onInstallFile = { uri ->
-                viewModel.installCustomPlugin(uri) { success ->
-                    if (success) showCustomKernelDialog = false
-                }
-            },
-            onDismiss = { showCustomKernelDialog = false },
-        )
+        // KimiNoBox: KernelSelectionDialog / CustomKernelSheet entry points removed with the section
     }
 }
 
