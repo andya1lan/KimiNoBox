@@ -54,7 +54,8 @@ internal fun LazyListScope.nodeGridItems(
 ) {
     itemsIndexed(
         items = proxies,
-        key = { _, proxy -> proxy.name },
+        // KimiNoBox: index + name; duplicate node names across providers crashed the list
+        key = { index, proxy -> "$index:${proxy.name}" },
         contentType = { _, _ -> "NodeCard1" },
     ) { index, proxy ->
         NodeCard(

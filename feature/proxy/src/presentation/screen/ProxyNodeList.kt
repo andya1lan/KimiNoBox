@@ -185,7 +185,8 @@ internal fun NodeListPage(
                         progress = delayTestProgress,
                     )
                 }
-                itemsIndexed(items = visibleProxies, key = { _, proxy -> proxy.name }) { index, proxy ->
+                // KimiNoBox: index + name; duplicate node names across providers crashed the grid
+                itemsIndexed(items = visibleProxies, key = { index, proxy -> "$index:${proxy.name}" }) { index, proxy ->
                     NodeCard(
                         proxy = proxy,
                         isSelected = proxy.name == group.now,
