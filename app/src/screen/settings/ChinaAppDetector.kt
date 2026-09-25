@@ -184,7 +184,8 @@ class ChinaAppDetector(context: Context) {
 
     companion object {
         // The version suffix invalidates cached verdicts produced by older heuristics.
-        private const val CACHE_ID = "china_app_detector_cache_v2"
+        // KimiNoBox: v3 drops verdicts made before com.mxtech / com.stubhub were skipped
+        private const val CACHE_ID = "china_app_detector_cache_v3"
 
         // Upper bound for dex entries we are willing to buffer in memory for scanning.
         private const val MAX_SCANNABLE_DEX_BYTES = 100L * 1024 * 1024
@@ -201,6 +202,9 @@ class ChinaAppDetector(context: Context) {
                 "com.apple",
                 "com.zhiliaoapp.musically",
                 "com.android.providers.downloads",
+                // KimiNoBox: FlClash ae29f38 — `com.mx` / `com.stub` prefixes misfire on these
+                "com.mxtech",
+                "com.stubhub",
             )
 
         private val chinaAppPrefixList =
