@@ -37,7 +37,7 @@ internal object CoreArtifacts {
         File(context.applicationInfo.nativeLibraryDir, PREVIEW_SHELL_NAME)
 
     fun library(context: Context): File {
-        KernelManager.installed(context)?.let { return it }
+        // KimiNoBox: remote kernels are disabled; the core is always the bundled locked release
         return bundledLibrary(context)
     }
 
