@@ -35,7 +35,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.Settings2
@@ -59,7 +64,24 @@ fun AccessControlScreen(navigator: Navigator) {
     val uiState by viewModel.uiState.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
 
-    LaunchedEffect(viewModel) { viewModel.refreshSelection() }
+    // KimiNoBox: entering the page re-asks for the installed-apps permission when missing
+    LaunchedEffect(viewModel) { viewModel.onScreenEntered() }
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.effect.collect { effect ->
+            if (effect is AccessControlViewModel.AccessControlUiEffect.ShowMessage) {
+                context.toast(effect.message)
+            }
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.onResumed()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var showSortMenu by remember { mutableStateOf(false) }
     var showOpsMenu by remember { mutableStateOf(false) }
@@ -91,11 +113,7 @@ fun AccessControlScreen(navigator: Navigator) {
     val permissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
-            onResult = { isGranted ->
-                if (isGranted) {
-                    viewModel.onPermissionResult()
-                }
-            },
+            onResult = { isGranted -> viewModel.onPermissionResult(isGranted) }, // KimiNoBox
         )
 
     LaunchedEffect(uiState.needsMiuiPermission) {
@@ -281,6 +299,9 @@ fun AccessControlScreen(navigator: Navigator) {
                             end = listEndPadding,
                         ),
                 ) {
+                    if (uiState.permissionBanner) {
+                        item(key = "kimi_permission_banner") { InstalledAppsPermissionBanner() } // KimiNoBox
+                    }
                     accessControlAppItems(filteredApps, uiState, viewModel)
                 }
             }

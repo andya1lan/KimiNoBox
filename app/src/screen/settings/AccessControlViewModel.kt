@@ -26,7 +26,6 @@ package com.github.yumeyucca.yumebox.screen.settings
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
 import com.github.yumeyucca.yumebox.common.util.stateInWhileSubscribed
 import com.github.yumeyucca.yumebox.core.presentation.AndroidContractStateViewModel
@@ -36,6 +35,7 @@ import com.github.yumeyucca.yumebox.data.model.AccessControlMode
 import com.github.yumeyucca.yumebox.data.model.AccessControlSortMode
 import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
 import com.github.yumeyucca.yumebox.runtime.service.root.RootPackageShell
+import tf.gal.yumebox.locale.YumeTxt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -81,6 +81,7 @@ class AccessControlViewModel(
         val sortMode: AccessControlSortMode = AccessControlSortMode.LABEL,
         val selectedFirst: Boolean = true,
         val needsMiuiPermission: Boolean = false,
+        val permissionBanner: Boolean = false, // KimiNoBox: installed-apps permission banner
         override val message: String? = null,
         override val error: String? = null,
     ) : LoadableState<UiState> {
@@ -117,39 +118,60 @@ class AccessControlViewModel(
         checkAndLoad()
     }
 
+    // KimiNoBox: permission state for the FlClash-style flow (see InstalledAppsPermission)
+    private var permissionSupported = false
+    private var permissionGranted = false
+    private var permissionDenied = false
+
     private fun checkAndLoad() {
-        val context = getApplication<Application>()
-        val permission = "com.android.permission.GET_INSTALLED_APPS"
-
-        if (RootPackageShell.hasRootAccess()) {
-            loadApps()
-            return
+        if (!RootPackageShell.hasRootAccess()) {
+            val context = getApplication<Application>()
+            permissionSupported = InstalledAppsPermission.isSupported(context.packageManager)
+            permissionGranted = InstalledAppsPermission.isGranted(context)
         }
+        // KimiNoBox: load right away (possibly filtered) instead of waiting for the request
+        loadApps()
+    }
 
-        val hasPermission =
-            ContextCompat.checkSelfPermission(context, permission) ==
-                    PackageManager.PERMISSION_GRANTED
-        if (hasPermission) {
-            loadApps()
-            return
+    /** KimiNoBox: every page entry asks again while the permission is not granted. */
+    fun onScreenEntered() {
+        refreshSelection()
+        if (InstalledAppsPermission.shouldRequest(permissionSupported, permissionGranted)) {
+            _uiState.update { it.copy(needsMiuiPermission = true) }
         }
+    }
 
-        val isMiui = runCatching {
-            val permissionInfo = context.packageManager.getPermissionInfo(permission, 0)
-            permissionInfo.packageName == "com.lbe.security.miui"
-        }
-            .getOrElse { false }
+    fun onPermissionResult(granted: Boolean) {
+        permissionGranted = granted
+        permissionDenied = !granted
+        _uiState.update { it.copy(needsMiuiPermission = false) }
+        loadApps()
+    }
 
-        if (isMiui) {
-            _uiState.update { it.copy(needsMiuiPermission = true, isLoading = false) }
-        } else {
+    /** KimiNoBox: back from the system settings page — re-check, reload when it changed. */
+    fun onResumed() {
+        if (!permissionSupported) return
+        val granted = InstalledAppsPermission.isGranted(getApplication())
+        if (granted != permissionGranted) {
+            permissionGranted = granted
+            if (granted) permissionDenied = false
             loadApps()
         }
     }
 
-    fun onPermissionResult() {
-        _uiState.update { it.copy(needsMiuiPermission = false) }
-        loadApps()
+    private fun updatePermissionBanner() {
+        _uiState.update { state ->
+            state.copy(
+                permissionBanner =
+                    InstalledAppsPermission.shouldShowBanner(
+                        supported = permissionSupported,
+                        granted = permissionGranted,
+                        denied = permissionDenied,
+                        userAppCount =
+                            state.apps.count { !it.isSystemApp }.takeUnless { state.isLoading },
+                    )
+            )
+        }
     }
 
     fun onAccessControlModeChange(mode: AccessControlMode) {
@@ -179,6 +201,7 @@ class AccessControlViewModel(
                     initialSelectedPackages = selectedPackages,
                 )
             }
+            updatePermissionBanner()
         }
     }
 
@@ -364,12 +387,12 @@ class AccessControlViewModel(
                     _uiState.update { state -> state.copy(isLoading = false) }
                     return@launch
                 }
+            val currentPackages = currentFiltered.mapTo(linkedSetOf()) { it.packageName }
+            val targetPackages =
+                currentFiltered
+                    .filter { (it.packageName in chinaPackages) == selectChina }
+                    .mapTo(linkedSetOf()) { it.packageName }
             _uiState.update { state ->
-                val currentPackages = currentFiltered.mapTo(linkedSetOf()) { it.packageName }
-                val targetPackages =
-                    currentFiltered
-                        .filter { (it.packageName in chinaPackages) == selectChina }
-                        .mapTo(linkedSetOf()) { it.packageName }
                 state.copy(
                     isLoading = false,
                     selectedPackages =
@@ -377,6 +400,16 @@ class AccessControlViewModel(
                 )
             }
             persistSelectionAndApply()
+            // KimiNoBox: report how many apps the quick select picked (string existed, unused)
+            val settingsText = YumeTxt.AccessControl.Settings
+            tryEmitEffect(
+                AccessControlUiEffect.ShowMessage(
+                    settingsText.RegionSelectResult.format(
+                        if (selectChina) settingsText.ChinaApps else settingsText.OverseasApps,
+                        targetPackages.size,
+                    )
+                )
+            )
         }
     }
 
