@@ -25,6 +25,17 @@ plugins {
 
 android {
     namespace = "com.github.yumeyucca.yumebox.runtime.service"
+
+    // KimiNoBox: host JVM unit tests (profile commit / versions / config tester) live in `test/`,
+    // mirroring the flat `src/` layout the root build applies to `main`.
+    sourceSets {
+        getByName("test") {
+            kotlin.directories.apply {
+                clear()
+                add("test")
+            }
+        }
+    }
 }
 
 dependencies {
@@ -53,4 +64,6 @@ dependencies {
     implementation(libs.libsu.service)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+
+    testImplementation("junit:junit:4.13.2") // KimiNoBox: unit tests for the fork's reliability fixes
 }

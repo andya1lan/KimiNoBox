@@ -26,7 +26,9 @@ import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
 import com.github.yumeyucca.yumebox.runtime.service.core.CoreArtifacts
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Validates a profile's main `config.yaml` with the packaged mihomo shell (`libmihomo.so --test`),
@@ -35,9 +37,11 @@ import java.util.concurrent.TimeUnit
  *
  * This test is the gate that decides whether a subscription is importable at all.
  */
-internal object ProfileConfigTester {
+// KimiNoBox: public so the composite module can --test its trial-compiled final config
+object ProfileConfigTester {
     private const val TAG = "ProfileConfigTester"
     private const val TIMEOUT_MS = 20_000L
+    private const val OUTPUT_DRAIN_MS = 2_000L
     private const val MAX_ERROR_CHARS = 400
     private const val CORE_FATAL_PREFIX = "mihomo:"
     private const val TEST_FAILED_MARKER = "test failed:"
@@ -91,20 +95,20 @@ internal object ProfileConfigTester {
                             else "$nativeLibDir:$existing"
                     }
                     .start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            val finished = process.waitFor(TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                return reject(
-                    IllegalStateException("mihomo config test timed out after ${TIMEOUT_MS}ms"),
-                )
-            }
-            if (process.exitValue() == 0) {
-                Result.success(Unit)
-            } else {
-                reject(
-                    IllegalArgumentException(readableError(output)),
-                )
+            // KimiNoBox: drain output on its own thread so the timeout below can actually fire
+            when (val outcome = awaitProcess(process, TIMEOUT_MS)) {
+                ProcessOutcome.TimedOut ->
+                    reject(
+                        IllegalStateException("mihomo config test timed out after ${TIMEOUT_MS}ms"),
+                    )
+                is ProcessOutcome.Exited ->
+                    if (outcome.exitCode == 0) {
+                        Result.success(Unit)
+                    } else {
+                        reject(
+                            IllegalArgumentException(readableError(outcome.output)),
+                        )
+                    }
             }
         } catch (error: Exception) {
             Timber.tag(TAG).e(error, "mihomo config test failed to run")
@@ -118,6 +122,27 @@ internal object ProfileConfigTester {
     }
 
     private fun reject(error: Throwable): Result<Unit> = Result.failure(error)
+
+    // KimiNoBox: a child that never closes stdout used to block readText() forever, so the 20 s
+    // waitFor() was never reached while processLock stayed held.
+    internal sealed interface ProcessOutcome {
+        data object TimedOut : ProcessOutcome
+
+        data class Exited(val exitCode: Int, val output: String) : ProcessOutcome
+    }
+
+    internal fun awaitProcess(process: Process, timeoutMs: Long): ProcessOutcome {
+        val output = FutureTask { process.inputStream.bufferedReader().use { it.readText() } }
+        thread(name = "config-test-output", isDaemon = true) { output.run() }
+        if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+            process.destroyForcibly()
+            output.cancel(true)
+            return ProcessOutcome.TimedOut
+        }
+        val text =
+            runCatching { output.get(OUTPUT_DRAIN_MS, TimeUnit.MILLISECONDS) }.getOrDefault("")
+        return ProcessOutcome.Exited(process.exitValue(), text)
+    }
 
     private fun isAgeEncrypted(configFile: File): Boolean {
         val header =
