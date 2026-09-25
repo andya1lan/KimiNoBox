@@ -7,6 +7,7 @@
 package com.github.yumeyucca.yumebox.runtime.service.core
 
 import android.content.Context
+import android.os.SystemClock
 import com.github.yumeyucca.yumebox.core.bridge.Channel
 import com.github.yumeyucca.yumebox.core.bridge.NativeProcess
 import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
@@ -24,9 +25,17 @@ class PreviewCoreProcess(private val context: Context) {
     private var endpoint: CoreEndpoint? = null
     private var controller: CoreController? = null
 
-    @Synchronized
+    // KimiNoBox: serializes stop() so every caller returns only after the child is gone
+    private val exitLock = Any()
+
+    // KimiNoBox: the previous child is awaited outside the monitor, then the new one launched
     fun start(config: String): CoreEndpoint {
         stop()
+        return launch(config)
+    }
+
+    @Synchronized
+    private fun launch(config: String): CoreEndpoint {
         // Compiled provider paths and the geo/MMDB assets are rooted at runtimeHomeDir. Keep that
         // as the core home, but use a nested process workdir so preview diagnostics cannot overwrite
         // the real core's core.log.
@@ -68,15 +77,41 @@ class PreviewCoreProcess(private val context: Context) {
         return nextEndpoint
     }
 
-    @Synchronized
+    /**
+     * KimiNoBox: SIGTERM, wait for `/proc/<pid>` to vanish, SIGKILL after the grace period. A
+     * preview blocked in ApplyConfig ignores SIGTERM while holding the shared cache.db lock, and a
+     * real core started before it exits runs the whole session without a selection cache.
+     * Blocking — callers stay off the main thread; the wait runs outside the monitor so
+     * [isAlive]/[controller] never queue behind it.
+     */
     fun stop() {
+        synchronized(exitLock) {
+            val previous = detach() ?: return
+            runCatching { previous.terminate() }
+            if (!awaitExit(previous.pid, TERM_GRACE_MS)) {
+                Timber.tag(TAG).w("preview core ignored SIGTERM; sending SIGKILL")
+                runCatching { previous.kill() }
+                awaitExit(previous.pid, KILL_GRACE_MS)
+            }
+        }
+    }
+
+    @Synchronized
+    private fun detach(): NativeProcess? {
         val previous = process
         process = null
         endpoint = null
         controller = null
-        if (previous != null) {
-            runCatching { previous.terminate() }
+        return previous
+    }
+
+    private fun awaitExit(pid: Int, timeoutMs: Long): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (File("/proc/$pid").exists()) {
+            if (SystemClock.elapsedRealtime() >= deadline) return false
+            Thread.sleep(EXIT_POLL_MS)
         }
+        return true
     }
 
     @Synchronized
@@ -134,5 +169,9 @@ class PreviewCoreProcess(private val context: Context) {
         const val SOCK = "preview.sock"
         const val PREVIEW_WORKDIR = "preview"
         const val CHUNK = 32 * 1024
+        // KimiNoBox: preview handoff grace periods (mirrors CoreProcess.stopVpnProcess)
+        const val TERM_GRACE_MS = 1_500L
+        const val KILL_GRACE_MS = 500L
+        const val EXIT_POLL_MS = 25L
     }
 }

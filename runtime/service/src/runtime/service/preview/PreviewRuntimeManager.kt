@@ -21,12 +21,14 @@ import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
 import com.github.yumeyucca.yumebox.runtime.service.profile.ImportedDao
 import com.github.yumeyucca.yumebox.runtime.service.session.CompiledConfigPipeline
 import com.github.yumeyucca.yumebox.runtime.service.session.SessionRuntimeSpecFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicLong
 
@@ -75,7 +77,8 @@ class PreviewRuntimeManager(context: Context) {
             }
             if (!process.isAlive() || _state.value.fingerprint != compiled.fingerprint) {
                 delayOverlay.clear()
-                process.start(compiled.finalYaml)
+                // KimiNoBox: start() now waits for the previous child to exit; keep it off Main
+                withContext(Dispatchers.IO) { process.start(compiled.finalYaml) }
             }
             val groups = awaitGroups(requestGeneration)
             if (generation.get() == requestGeneration && process.isAlive()) {
@@ -86,13 +89,14 @@ class PreviewRuntimeManager(context: Context) {
     }
 
     /** Never wait for config compilation or a controller readiness retry on the real-core handoff. */
-    fun stop() {
+    // KimiNoBox: suspend on IO — the handoff now waits (bounded) for the preview child to exit
+    suspend fun stop() = withContext(Dispatchers.IO) {
         generation.incrementAndGet()
         delayOverlay.clear()
         process.stop()
     }
 
-    fun reset() {
+    suspend fun reset() = withContext(Dispatchers.IO) {
         generation.incrementAndGet()
         delayOverlay.clear()
         process.stop()
