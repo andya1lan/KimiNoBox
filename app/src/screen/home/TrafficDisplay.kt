@@ -283,9 +283,7 @@ private fun UploadSection(
             ) {
                 ProxyTypeCapsule(proxyMode = proxyMode)
             }
-            if (isRunning && onOpenPanel != null) {
-                NetworkPanelStatusButton(onClick = onOpenPanel)
-            }
+            // KimiNoBox: built-in panel button removed; panels are served by mihomo
         }
     }
 }

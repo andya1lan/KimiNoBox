@@ -186,7 +186,7 @@ fun MoeHomePage(
     val handlePageChange = LocalHandlePageChange.current
     val sidebarIcons = remember(onOpenPanel, handlePageChange) {
         listOf(
-            MoeSidebarIconItem(Yume.Zashboard) { onOpenPanel?.invoke() },
+            // KimiNoBox: built-in panel (Zashboard) entry removed; panels are served by mihomo
             MoeSidebarIconItem(ShellIcons.OpenProfiles) {
                 handlePageChange(BottomBarDestination.Config)
             },
