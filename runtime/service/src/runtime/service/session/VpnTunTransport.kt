@@ -26,6 +26,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.IpPrefix
 import android.net.ProxyInfo
+import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import com.github.yumeyucca.yumebox.runtime.api.Components
@@ -82,12 +83,14 @@ class VpnTunTransport(
                     PendingIntent.getActivity(
                         vpnService,
                         R.id.nf_vpn_status,
+                        // KimiNoBox: the VPN settings gear opens the app home page
                         Intent()
-                            .setComponent(Components.PROXY_SHEET_ACTIVITY)
+                            .setComponent(Components.MAIN_ACTIVITY)
+                            .setData(Uri.parse(Components.HOME_DEEP_LINK))
                             .addFlags(
                                 Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                    Intent.FLAG_ACTIVITY_NO_ANIMATION
+                                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                    Intent.FLAG_ACTIVITY_SINGLE_TOP
                             ),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                     )

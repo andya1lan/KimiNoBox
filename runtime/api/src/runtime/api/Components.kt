@@ -30,4 +30,7 @@ import android.content.ComponentName
 object Components {
     lateinit var MAIN_ACTIVITY: ComponentName
     lateinit var PROXY_SHEET_ACTIVITY: ComponentName
+
+    // KimiNoBox: notification / VPN settings / tile long-press all open the home page
+    const val HOME_DEEP_LINK = "yumebox://page/home"
 }

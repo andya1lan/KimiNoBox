@@ -26,6 +26,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.service.quicksettings.TileService
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,6 +55,7 @@ import com.github.yumeyucca.yumebox.presentation.navigation.AppNavigationCompone
 import com.github.yumeyucca.yumebox.presentation.theme.ProvideAndroidPlatformTheme
 import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze
 import com.github.yumeyucca.yumebox.presentation.theme.YumeTheme
+import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.service.WifiAutomationService
 import com.github.yumeyucca.yumebox.screen.moe.HomePreviewGuideDialog
 import com.github.yumeyucca.yumebox.screen.moe.SystemWallpaperAccess
@@ -291,6 +293,10 @@ class MainActivity : FragmentActivity() {
             return
         }
         safeIntent.data?.let { handleDeepLinkUri(it) }
+        // KimiNoBox: long-pressing the quick-settings tile opens the home page
+        if (safeIntent.action == TileService.ACTION_QS_TILE_PREFERENCES) {
+            _pendingDeepLink.value = Components.HOME_DEEP_LINK
+        }
 
         intentController.handleIntent(safeIntent)
     }

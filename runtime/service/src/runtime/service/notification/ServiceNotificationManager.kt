@@ -24,6 +24,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -235,11 +236,13 @@ class ServiceNotificationManager(
                 service,
                 0,
                 Intent().apply {
-                    component = Components.PROXY_SHEET_ACTIVITY
+                    // KimiNoBox: open the app home page instead of the quick node sheet
+                    component = Components.MAIN_ACTIVITY
+                    data = Uri.parse(Components.HOME_DEEP_LINK)
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                            Intent.FLAG_ACTIVITY_NO_ANIMATION
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
                     )
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
