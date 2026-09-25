@@ -47,6 +47,7 @@ object ProfileProcessor {
     private data class UpdateSnapshot(
         val imported: Imported,
         val hasCommittedConfig: Boolean,
+        val baseline: ProfileCommit.Baseline, // KimiNoBox: staged files before the update (B1)
     )
 
     @Suppress("TooGenericExceptionCaught")
@@ -78,6 +79,7 @@ object ProfileProcessor {
                             // Sentinel "this profile already committed a config", used below to
                             // decide whether a failed update may roll back (delete) it.
                             hasCommittedConfig = targetDir.resolve("config.yaml").isFile,
+                            baseline = ProfileCommit.baseline(stagingDir), // KimiNoBox
                         )
                     }
 
@@ -148,8 +150,8 @@ object ProfileProcessor {
 
                     profileLock.withLock {
                         if (ImportedDao.exists(snapshot.imported.uuid)) {
-                            targetDir.deleteRecursively()
-                            stagingDir.copyRecursively(targetDir, overwrite = true)
+                            // KimiNoBox: file-level atomic commit instead of delete + copy (B1)
+                            ProfileCommit.commit(stagingDir, targetDir, snapshot.baseline)
 
                             val finalName =
                                 if (snapshot.imported.type == Profile.Type.Url) {

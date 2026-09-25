@@ -37,7 +37,7 @@ import kotlin.concurrent.thread
  *
  * This test is the gate that decides whether a subscription is importable at all.
  */
-// KimiNoBox: public so the composite module can --test its trial-compiled final config
+// KimiNoBox: public so fork features can --test a compiled config outside this package
 object ProfileConfigTester {
     private const val TAG = "ProfileConfigTester"
     private const val TIMEOUT_MS = 20_000L
