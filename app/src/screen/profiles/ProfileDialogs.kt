@@ -294,16 +294,7 @@ internal fun ProfileSettingsDialog(
                                     maxLines = 2,
                                 )
                             }
-
-                            AgeSecretKeyField(
-                                value = editAgeSecretKey,
-                                onValueChange = {
-                                    editAgeSecretKey = it
-                                    ageSecretKeyEdited = true
-                                },
-                                label = YumeTxt.ProfilesPage.SettingsDialog.AgeSecretKey,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            // KimiNoBox: age secret key update hidden (age-encrypted configs are out of scope)
                         }
                     }
 

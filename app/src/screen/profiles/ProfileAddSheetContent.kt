@@ -327,12 +327,7 @@ private fun ManualProfileContent(
             }
         }
 
-        AgeSecretKeyField(
-            value = ageSecretKeyTextFieldValue,
-            onValueChange = onAgeSecretKeyChange,
-            label = YumeTxt.ProfilesPage.Input.AgeSecretKey,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // KimiNoBox: age secret key input hidden (age-encrypted configs are out of scope)
         if (error.isNotEmpty()) {
             Text(
                 text = error,
