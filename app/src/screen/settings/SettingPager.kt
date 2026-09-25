@@ -207,12 +207,7 @@ private fun SettingsMasterList(
             item {
                 Title(YumeTxt.Settings.Section.More)
                 AppCard {
-                    SettingsRootPreference(
-                        title = YumeTxt.Settings.More.Lab,
-                        summary = YumeTxt.Settings.More.LabSummary,
-                        onClick = { onOpen(Route.Feature) },
-                        icon = Yume.FlaskConical,
-                    )
+                    // KimiNoBox: Lab (Sub-Store, built-in panel, remote controller) entry hidden
                     ArrowPreference(
                         title = YumeTxt.Settings.More.About,
                         summary = YumeTxt.Settings.More.AboutSummary,
