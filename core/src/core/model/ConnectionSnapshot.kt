@@ -20,17 +20,43 @@
 
 package com.github.yumeyucca.yumebox.core.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class ConnectionSnapshot(
     val downloadTotal: Long = 0L,
     val uploadTotal: Long = 0L,
+    // KimiNoBox: mihomo sends `"connections": null` when idle; decode it as an empty list
+    @Serializable(with = NullAsEmptyConnectionsSerializer::class)
     val connections: List<ConnectionInfo> = emptyList(),
     val memory: Long = 0L,
 )
+
+// KimiNoBox: see ConnectionSnapshot.connections
+@OptIn(ExperimentalSerializationApi::class)
+internal object NullAsEmptyConnectionsSerializer : KSerializer<List<ConnectionInfo>> {
+    private val delegate = ListSerializer(ConnectionInfo.serializer())
+
+    override val descriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: List<ConnectionInfo>) =
+        delegate.serialize(encoder, value)
+
+    override fun deserialize(decoder: Decoder): List<ConnectionInfo> =
+        if (decoder.decodeNotNullMark()) {
+            delegate.deserialize(decoder)
+        } else {
+            decoder.decodeNull()
+            emptyList()
+        }
+}
 
 @Serializable
 data class ConnectionInfo(
