@@ -247,6 +247,7 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
             exit = fadeOut() + slideOutVertically { it / 3 },
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(MoeUi.Hero.runtimeInfoTopGap)) {
+                MoeCardUptime(state.duration, 1f - state.sidebarToggleProgress) // KimiNoBox: E2
                 MoeTrafficStrip(state.traffic.download, state.traffic.upload)
                 MoeHomeInfoPanel(
                     serverName = state.selectedServerName.takeIf { state.isRunning },
