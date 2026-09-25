@@ -36,6 +36,7 @@ import com.github.yumeyucca.yumebox.runtime.service.util.directoryLastModified
 import com.github.yumeyucca.yumebox.runtime.service.util.importedDir
 import java.io.File
 import java.security.MessageDigest
+import java.util.UUID
 
 class SessionRuntimeSpecFactory(
     context: Context,
@@ -54,12 +55,20 @@ class SessionRuntimeSpecFactory(
     /** A local, no-TUN core used only to materialize proxy-group state while the app is foregrounded. */
     fun createPreviewSpec(): RuntimeSpec = createSpec(RuntimeOwner.VpnService, RunMode.VpnService, preview = true)
 
+    // KimiNoBox: the real VPN spec of any profile (active or not), e.g. to preview its final config
+    fun createVpnSpecFor(uuid: UUID): RuntimeSpec =
+        createSpec(
+            RuntimeOwner.VpnService,
+            RunMode.VpnService,
+            profile = ImportedDao.queryByUUID(uuid) ?: error("Profile metadata not found: $uuid"),
+        )
+
     private fun createSpec(
         owner: RuntimeOwner,
         runMode: RunMode,
         preview: Boolean = false,
+        profile: com.github.yumeyucca.yumebox.runtime.service.profile.Imported = requireActiveProfile(), // KimiNoBox
     ): RuntimeSpec {
-        val profile = requireActiveProfile()
         val profileDir = context.importedDir.resolve(profile.uuid.toString())
         val disableAllUserOverrides = networkSettings.disableAllOverride.value
         val skipModePatches =
