@@ -49,6 +49,7 @@ import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.util.PollingTimerSpecs
 import com.github.yumeyucca.yumebox.core.util.PollingTimers
 import com.github.yumeyucca.yumebox.data.model.ThemeMode
+import com.github.yumeyucca.yumebox.data.network.IpMonitoringState
 import com.github.yumeyucca.yumebox.domain.model.TrafficData
 import com.github.yumeyucca.yumebox.presentation.component.BottomBarDestination
 import com.github.yumeyucca.yumebox.presentation.component.LocalHandlePageChange
@@ -282,6 +283,8 @@ fun MoeHomePage(
             canLaunch = profilesLoaded && profiles.isNotEmpty() && !isRemoteController,
             isRemoteController = isRemoteController,
             usesTabletLayout = windowLayoutMode.usesNavigationRail,
+            // KimiNoBox: E5 — the IP was already polled for this page, only never shown
+            externalIp = (screen.ipMonitoringState as? IpMonitoringState.Success)?.externalIp,
         )
     val actions =
         MoeHomeActions(

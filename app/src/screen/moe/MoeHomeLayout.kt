@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.github.yumeyucca.yumebox.data.network.IpInfo
 import com.github.yumeyucca.yumebox.domain.model.TrafficData
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.screen.home.HomeProxyControlState
@@ -69,6 +70,7 @@ internal data class MoeHomeLayoutState(
     val canLaunch: Boolean,
     val isRemoteController: Boolean,
     val usesTabletLayout: Boolean = false,
+    val externalIp: IpInfo? = null, // KimiNoBox: egress IP row (E5)
 )
 
 internal class MoeHomeActions(
@@ -254,6 +256,7 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
                     serverPing = state.selectedServerPing.takeIf { state.isRunning },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                MoeCardExternalIp(state.externalIp) // KimiNoBox: E5
             }
         }
     }
@@ -413,6 +416,7 @@ private fun MoeTabletHomeLayout(
                                 serverPing = state.selectedServerPing.takeIf { state.isRunning },
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            MoeCardExternalIp(state.externalIp) // KimiNoBox: E5
                         }
                     }
                 }
