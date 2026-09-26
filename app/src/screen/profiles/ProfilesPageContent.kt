@@ -27,7 +27,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue // KimiNoBox
+import androidx.compose.runtime.mutableStateOf // KimiNoBox
+import androidx.compose.runtime.remember // KimiNoBox
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue // KimiNoBox
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -38,6 +42,8 @@ import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.screen.home.HomeViewModel
+import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSheet // KimiNoBox
+import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSummary // KimiNoBox
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -188,6 +194,8 @@ private fun ProfilesList(
         }
     val importedDir = App.instance.filesDir.resolve("imported")
     val versionNotes = rememberVersionNotes(profiles) // KimiNoBox
+    var nodeSourceSheetFor by remember { mutableStateOf<Profile?>(null) } // KimiNoBox
+    val navigator = LocalNavigator.current // KimiNoBox
 
     ScreenLazyColumn(
         lazyListState = listState,
@@ -215,9 +223,14 @@ private fun ProfilesList(
                     onToggleEnabled = { onToggleProfile(it) },
                     note = versionNotes[profile.uuid]?.text, // KimiNoBox
                     noteIsError = versionNotes[profile.uuid]?.isError == true, // KimiNoBox
+                    extra = { NodeSourceSummary(profile.uuid.toString()) { nodeSourceSheetFor = profile } }, // KimiNoBox
                 )
             }
         }
+    }
+    // KimiNoBox
+    nodeSourceSheetFor?.let { profile ->
+        NodeSourceSheet(profile = profile, navigator = navigator, onDismiss = { nodeSourceSheetFor = null })
     }
 }
 

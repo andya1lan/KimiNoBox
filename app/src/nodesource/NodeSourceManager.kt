@@ -230,8 +230,9 @@ class NodeSourceManager(
             bindings.removeOverrideFromAllBindings(source.id)
             configStore.delete(source.id)
             stateStore.remove(source.id)
-            NodeSourceCopies.master(context, source.form.pathId).delete()
             if (active in source.boundProfileIds) reloader.reapplyActiveProfileOverride()
+            // The reload has dropped the provider, so no core reads these any more.
+            (profileCopies(source) + NodeSourceCopies.master(context, source.form.pathId)).forEach(File::delete)
         }
 
     /**

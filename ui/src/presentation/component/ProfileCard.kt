@@ -61,6 +61,7 @@ fun ProfileCard(
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier,
     note: String? = null, // KimiNoBox: config version status
     noteIsError: Boolean = false, // KimiNoBox
+    extra: (@Composable () -> Unit)? = null, // KimiNoBox: node source summary
 ) {
     val spacing = AppTheme.spacing
     val opacity = AppTheme.opacity
@@ -193,6 +194,7 @@ fun ProfileCard(
                     modifier = Modifier.padding(top = spacing.space4),
                 )
             }
+            extra?.invoke() // KimiNoBox
         }
 
         HorizontalDivider(
