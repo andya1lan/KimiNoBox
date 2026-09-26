@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.state.ToggleableState
+import com.github.yumeyucca.yumebox.common.util.showToastDialog // KimiNoBox
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.model.GeoFileType
 import com.github.yumeyucca.yumebox.core.model.GeoXItem
@@ -40,6 +41,7 @@ import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
+import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade // KimiNoBox
 import com.github.yumeyucca.yumebox.substore.util.SubStoreDownloadClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,7 +55,6 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import java.io.File
 
 @Composable
 fun MetaFeatureScreen(navigator: Navigator) {
@@ -61,6 +62,7 @@ fun MetaFeatureScreen(navigator: Navigator) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val downloadClient: SubStoreDownloadClient = koinInject()
+    val proxyFacade: ProxyFacade = koinInject() // KimiNoBox
 
     val showGeoXDownloadSheet = remember { mutableStateOf(false) }
     val ageKeyHybrid = remember { mutableStateOf(false) }
@@ -134,6 +136,7 @@ fun MetaFeatureScreen(navigator: Navigator) {
             context = context,
             scope = scope,
             downloadClient = downloadClient,
+            vpnRunning = { proxyFacade.isRunning.value }, // KimiNoBox
         )
 
         AgeKeyGeneratorDialog(
@@ -151,6 +154,7 @@ private fun GeoXDownloadDialog(
     context: android.content.Context,
     scope: kotlinx.coroutines.CoroutineScope,
     downloadClient: SubStoreDownloadClient,
+    vpnRunning: () -> Boolean, // KimiNoBox
 ) {
     val spacing = AppTheme.spacing
     val selectedItems = remember { mutableStateMapOf<GeoFileType, Boolean>() }
@@ -201,7 +205,7 @@ private fun GeoXDownloadDialog(
                             return@TextButton
                         }
                         show.value = false
-                        downloadGeoXFiles(context, scope, downloadClient, itemsToDownload)
+                        downloadGeoXFiles(context, scope, downloadClient, itemsToDownload, vpnRunning) // KimiNoBox
                     },
                     enabled = canConfirm,
                     modifier = Modifier.weight(1f),
@@ -217,21 +221,15 @@ private fun downloadGeoXFiles(
     scope: kotlinx.coroutines.CoroutineScope,
     downloadClient: SubStoreDownloadClient,
     items: List<GeoXItem>,
+    vpnRunning: () -> Boolean, // KimiNoBox
 ) {
+    // KimiNoBox: a failed download keeps the current file, and a running core is told to restart
     scope.launch {
-        var successCount = 0
-        withContext(Dispatchers.IO) {
-            val runtimeHome = context.runtimeHomeDir
-            runtimeHome.mkdirs()
-            items.forEach { item ->
-                val targetFile = File(runtimeHome, item.fileName)
-                if (downloadClient.download(item.url, targetFile)) {
-                    successCount++
-                }
+        val result =
+            withContext(Dispatchers.IO) {
+                GeoXUpdate.download(downloadClient, context.runtimeHomeDir, items)
             }
-        }
-        context.toast(
-            YumeTxt.MetaFeature.Download.DownloadComplete.format(successCount, items.size)
-        )
+        val message = GeoXUpdate.message(result, vpnRunning())
+        if (result.failed.isEmpty()) context.toast(message) else showToastDialog(message)
     }
 }
