@@ -289,6 +289,10 @@ fun LogScreen(navigator: Navigator) {
                         innerPadding = combinePaddingValues(innerPadding, mainLikePadding),
                         lazyListState = listState,
                     ) {
+                        // KimiNoBox
+                        if (connectionState == LogConnectionState.NotRunning && filteredEntries.isNotEmpty()) {
+                            item(key = "not-running", contentType = "notice") { LogNotRunningNotice() }
+                        }
                         itemsIndexed(
                             items = filteredEntries,
                             key = { _, item -> item.id },
@@ -317,6 +321,9 @@ fun LogScreen(navigator: Navigator) {
 
                                 connectionState == LogConnectionState.Retrying ->
                                     YumeTxt.Log.Empty.Retrying to YumeTxt.Log.Empty.RetryingHint
+
+                                connectionState == LogConnectionState.NotRunning -> // KimiNoBox
+                                    LOG_NOT_RUNNING_TITLE to LOG_NOT_RUNNING_HINT
 
                                 levelFilter != LogLevelFilter.All ->
                                     YumeTxt.Log.Empty.NoMatch to levelFilter.displayName()

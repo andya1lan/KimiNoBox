@@ -43,6 +43,7 @@ internal class CoreControllerLogStream(
     private val json: Json,
     private val logUrl: () -> String,
     private val applyAuth: HttpRequestBuilder.() -> Unit,
+    private val probeUrl: () -> String, // KimiNoBox
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sink = AtomicReference<LogSink?>(null)
@@ -80,6 +81,11 @@ internal class CoreControllerLogStream(
     }
 
     private suspend fun streamOnce(sink: LogSink) {
+        // KimiNoBox: mihomo sends the /logs headers only with the first log line, which can be
+        // half a minute away on an idle core. A reachable controller is reported as connected now.
+        client.get(probeUrl()) { applyAuth() }
+        if (this.sink.get() !== sink) return
+        sink.observer.onConnected()
         client
             .prepareGet(logUrl()) {
                 applyAuth()

@@ -67,7 +67,7 @@ val appViewModelModule = module {
     viewModel { RemoteControllerViewModel(androidApplication(), get(), get()) }
     viewModel { AccessControlViewModel(androidApplication(), get(), get()) }
     viewModel { WifiAutomationViewModel(androidApplication(), get(), get()) }
-    viewModel { LogViewModel(androidApplication()) }
+    viewModel { LogViewModel(androidApplication(), get()) } // KimiNoBox
     viewModel { RulesViewModel(androidApplication()) }
     viewModel { BackupRestoreViewModel(androidApplication(), get()) }
 }

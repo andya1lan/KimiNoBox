@@ -95,6 +95,7 @@ class CoreController(
             json = json,
             logUrl = { buildUrl("logs", query = LOG_QUERY) },
             applyAuth = { applyAuth() },
+            probeUrl = { buildUrl("version") }, // KimiNoBox
         )
     }
 

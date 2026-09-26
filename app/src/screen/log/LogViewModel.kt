@@ -29,12 +29,17 @@ import androidx.lifecycle.viewModelScope
 import com.github.yumeyucca.yumebox.core.model.LogMessage
 import com.github.yumeyucca.yumebox.runtime.api.LogObserver
 import com.github.yumeyucca.yumebox.runtime.api.LogSubscription
+import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir // KimiNoBox
+import com.github.yumeyucca.yumebox.data.store.RemoteControllerStore // KimiNoBox
+import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade // KimiNoBox
 import com.github.yumeyucca.yumebox.runtime.client.access.RuntimeAccess
+import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess // KimiNoBox
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
 import java.io.IOException
 import java.text.SimpleDateFormat
+import java.util.Date // KimiNoBox
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.collections.ArrayDeque
@@ -62,9 +67,13 @@ enum class LogConnectionState {
     Connecting,
     Live,
     Retrying,
+    NotRunning, // KimiNoBox: no core to stream from
 }
 
-class LogViewModel(private val appContext: Context) : ViewModel() {
+class LogViewModel(
+    private val appContext: Context,
+    private val proxyFacade: ProxyFacade, // KimiNoBox
+) : ViewModel() {
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
     private val nextId = AtomicLong(0L)
     private val pendingLock = Any()
@@ -77,6 +86,7 @@ class LogViewModel(private val appContext: Context) : ViewModel() {
     @Volatile
     private var logSubscription: LogSubscription? = null
     private var connectJob: Job? = null
+    @Volatile private var prefilled = false // KimiNoBox
 
     val levelFilter: StateFlow<LogLevelFilter> = _levelFilter.asStateFlow()
     val connectionState: StateFlow<LogConnectionState> = _connectionState.asStateFlow()
@@ -102,7 +112,8 @@ class LogViewModel(private val appContext: Context) : ViewModel() {
             }
 
             override fun onError(error: Throwable) {
-                _connectionState.value = LogConnectionState.Retrying
+                _connectionState.value =
+                    if (coreStopped()) LogConnectionState.NotRunning else LogConnectionState.Retrying // KimiNoBox
             }
 
             override fun newItem(log: LogMessage) {
@@ -165,11 +176,14 @@ class LogViewModel(private val appContext: Context) : ViewModel() {
         if (logSubscription != null || connectJob?.isActive == true) return
         connectJob =
             viewModelScope.launch(Dispatchers.IO) {
+                prefillFromCoreLog() // KimiNoBox
                 var retryDelay = INITIAL_CONNECT_RETRY_MS
                 var firstAttempt = true
                 while (isActive && logSubscription == null) {
                     _connectionState.value =
-                        if (firstAttempt) {
+                        if (coreStopped()) {
+                            LogConnectionState.NotRunning // KimiNoBox
+                        } else if (firstAttempt) {
                             LogConnectionState.Connecting
                         } else {
                             LogConnectionState.Retrying
@@ -188,6 +202,23 @@ class LogViewModel(private val appContext: Context) : ViewModel() {
                 }
             }
     }
+
+    // KimiNoBox: the stream has no history, so start from the lines the core left in core.log
+    private fun prefillFromCoreLog() {
+        if (prefilled) return
+        prefilled = true
+        val file = appContext.runtimeHomeDir.resolve(CoreProcess.CORE_LOG)
+        CoreLogLines.parse(
+            CoreProcess.coreDiagnosticLog(appContext),
+            limit = PREFILL_LINES,
+            fallbackTime = Date(file.lastModified()),
+        )
+            .forEach(observer::newItem)
+    }
+
+    // KimiNoBox
+    private fun coreStopped(): Boolean =
+        !proxyFacade.isRunning.value && !RemoteControllerStore.isActive()
 
     fun setLevelFilter(filter: LogLevelFilter) {
         _levelFilter.value = filter
@@ -250,5 +281,6 @@ class LogViewModel(private val appContext: Context) : ViewModel() {
         const val LOG_BATCH_WINDOW_MS = 280L
         const val INITIAL_CONNECT_RETRY_MS = 500L
         const val MAX_CONNECT_RETRY_MS = 5_000L
+        const val PREFILL_LINES = 200 // KimiNoBox
     }
 }
