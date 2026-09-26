@@ -55,6 +55,7 @@ import com.github.yumeyucca.yumebox.presentation.navigation.AppNavigationCompone
 import com.github.yumeyucca.yumebox.presentation.theme.ProvideAndroidPlatformTheme
 import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze
 import com.github.yumeyucca.yumebox.presentation.theme.YumeTheme
+import com.github.yumeyucca.yumebox.screen.home.NodeSourceEmptyHint // KimiNoBox
 import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.service.WifiAutomationService
 import com.github.yumeyucca.yumebox.screen.moe.HomePreviewGuideDialog
@@ -210,6 +211,7 @@ class MainActivity : FragmentActivity() {
                             ) {
                                 AppNavContainer(navigationComponent)
                                 ToastDialogHost()
+                                NodeSourceEmptyHint() // KimiNoBox
 
                                 var showHomeGuide by remember {
                                     mutableStateOf(showHomeGuideInitially)

@@ -491,6 +491,12 @@ class CoreController(
     override fun queryProviders(): ProviderList =
         runBlocking(Dispatchers.IO) { queryProvidersAsync() }
 
+    /** KimiNoBox: node count of every proxy provider by name, for the empty node source hint. */
+    suspend fun proxyProviderSizes(): Map<String, Int> =
+        fetchProvidersResponse("proxies").providers.entries.associate { (key, entry) ->
+            entry.name.ifBlank { key } to entry.proxies.size
+        }
+
     private suspend fun fetchProvidersResponse(category: String): RawProvidersResponse {
         val raw = request(HttpMethod.Get, "providers", category).bodyAsText()
         return json.decodeFromString<RawProvidersResponse>(raw)

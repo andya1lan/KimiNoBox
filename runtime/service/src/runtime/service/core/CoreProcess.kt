@@ -643,6 +643,10 @@ class CoreProcess(private val context: Context) {
         /** Shared local-core controller client (unix socket path fixed, secret from [current]). */
         fun controller(context: Context): CoreApi = sharedController(context)
 
+        /** KimiNoBox: [CoreController.proxyProviderSizes] of the local core. */
+        suspend fun proxyProviderSizes(context: Context): Map<String, Int> =
+            sharedController(context).proxyProviderSizes()
+
         /** Suspendable startup probe so launch deadlines are not hidden by the synchronous API. */
         internal suspend fun probeController(context: Context) {
             sharedController(context).queryTunnelStateAsync()
