@@ -28,6 +28,7 @@ val nodeSourceModule =
     module {
         single { NodeSourceDownloader(get()) }
         single { NodeSourceStateStore(androidContext()) }
+        single { NodeSourceProfileFactory(androidContext(), get(), get()) }
         single(createdAtStart = true) {
             NodeSourceManager(
                 context = androidContext(),

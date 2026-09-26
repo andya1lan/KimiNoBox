@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceManager
@@ -71,5 +72,17 @@ fun NodeSourceSummary(profileId: String, onClick: () -> Unit) {
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth().padding(top = AppTheme.spacing.space4).clickable(onClick = onClick),
+    )
+}
+
+/** KimiNoBox: the 「从节点源新建配置」 entry under the add-profile card and in the empty page. */
+@Composable
+fun NewFromSourcesEntry(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Text(
+        text = "从节点源新建配置",
+        fontSize = 14.sp,
+        color = MiuixTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = AppTheme.spacing.space8),
     )
 }

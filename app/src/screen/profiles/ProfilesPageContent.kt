@@ -42,6 +42,8 @@ import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.screen.home.HomeViewModel
+import com.github.yumeyucca.yumebox.screen.nodesource.NewFromSourcesEntry // KimiNoBox
+import com.github.yumeyucca.yumebox.screen.nodesource.NewProfileFromSourcesDialog // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSheet // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSummary // KimiNoBox
 import kotlinx.coroutines.launch
@@ -130,6 +132,7 @@ internal fun ProfilesPageContent(
     sheetHost: @Composable () -> Unit = {},
 ) {
     val scrollBehavior = MiuixScrollBehavior()
+    var showFromSources by remember { mutableStateOf(false) } // KimiNoBox
 
     Scaffold(
         topBar = {
@@ -141,7 +144,7 @@ internal fun ProfilesPageContent(
     ) { innerPadding ->
         Box(Modifier.fillMaxSize()) {
             if (profiles.isEmpty()) {
-                ProfileEmptyAddGuide(onClick = onAddProfile)
+                ProfileEmptyAddGuide(onClick = onAddProfile, onNewFromSources = { showFromSources = true }) // KimiNoBox
             } else {
                 ProfilesList(
                     profiles = profiles,
@@ -150,6 +153,7 @@ internal fun ProfilesPageContent(
                     scrollBehavior = scrollBehavior,
                     isDownloading = isDownloading,
                     onAddProfile = onAddProfile,
+                    onNewFromSources = { showFromSources = true }, // KimiNoBox
                     onReorderProfiles = onReorderProfiles,
                     onShareProfile = onShareProfile,
                     onUpdateProfile = onUpdateProfile,
@@ -161,6 +165,15 @@ internal fun ProfilesPageContent(
             // Sheet composition is hosted here; dual-pane renders overlays in the left-pane root
             // Scaffold.
             sheetHost()
+            // KimiNoBox
+            if (showFromSources) {
+                val profilesViewModel = org.koin.androidx.compose.koinViewModel<ProfilesViewModel>()
+                NewProfileFromSourcesDialog(
+                    navigator = LocalNavigator.current,
+                    onDismiss = { showFromSources = false },
+                    onCreated = profilesViewModel::refreshProfiles,
+                )
+            }
         }
     }
 }
@@ -173,6 +186,7 @@ private fun ProfilesList(
     scrollBehavior: ScrollBehavior,
     isDownloading: Boolean,
     onAddProfile: () -> Unit,
+    onNewFromSources: () -> Unit, // KimiNoBox
     onReorderProfiles: (Int, Int) -> Unit,
     onShareProfile: (Profile) -> Unit,
     onUpdateProfile: (Profile) -> Unit,
@@ -205,6 +219,8 @@ private fun ProfilesList(
     ) {
         item(key = "profile_add") {
             ProfileAddCard(onClick = onAddProfile)
+            // KimiNoBox: in the same item, so the reorder index math keeps one slot for it
+            NewFromSourcesEntry(onClick = onNewFromSources, modifier = Modifier.padding(bottom = UiDp.dp12))
         }
         items(items = profiles, key = { it.uuid.toString() }) { profile ->
             ReorderableItem(reorderState, key = profile.uuid.toString()) { isDragging ->
@@ -267,7 +283,7 @@ private fun ProfileAddCard(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProfileEmptyAddGuide(onClick: () -> Unit) {
+private fun ProfileEmptyAddGuide(onClick: () -> Unit, onNewFromSources: () -> Unit) {
     val spacing = AppTheme.spacing
     val primary = MiuixTheme.colorScheme.primary
 
@@ -305,5 +321,6 @@ private fun ProfileEmptyAddGuide(onClick: () -> Unit) {
                 )
             }
         }
+        NewFromSourcesEntry(onClick = onNewFromSources, modifier = Modifier.padding(top = spacing.space8)) // KimiNoBox
     }
 }
