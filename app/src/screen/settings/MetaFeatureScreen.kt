@@ -65,8 +65,6 @@ fun MetaFeatureScreen(navigator: Navigator) {
     val proxyFacade: ProxyFacade = koinInject() // KimiNoBox
 
     val showGeoXDownloadSheet = remember { mutableStateOf(false) }
-    val ageKeyHybrid = remember { mutableStateOf(false) }
-    val ageKeyDialogVisible = remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = { TopBar(title = YumeTxt.MetaFeature.Title, scrollBehavior = scrollBehavior) }
@@ -110,25 +108,7 @@ fun MetaFeatureScreen(navigator: Navigator) {
                     )
                 }
             }
-            item {
-                Title(YumeTxt.MetaFeature.AgeKey.Section)
-                AppCard {
-                    ArrowPreference(
-                        title = YumeTxt.MetaFeature.AgeKey.X25519Title,
-                        onClick = {
-                            ageKeyHybrid.value = false
-                            ageKeyDialogVisible.value = true
-                        },
-                    )
-                    ArrowPreference(
-                        title = YumeTxt.MetaFeature.AgeKey.HybridTitle,
-                        onClick = {
-                            ageKeyHybrid.value = true
-                            ageKeyDialogVisible.value = true
-                        },
-                    )
-                }
-            }
+            // KimiNoBox: age key generator hidden (age-encrypted configs are out of scope)
         }
 
         GeoXDownloadDialog(
@@ -137,13 +117,6 @@ fun MetaFeatureScreen(navigator: Navigator) {
             scope = scope,
             downloadClient = downloadClient,
             vpnRunning = { proxyFacade.isRunning.value }, // KimiNoBox
-        )
-
-        AgeKeyGeneratorDialog(
-            show = ageKeyDialogVisible.value,
-            hybrid = ageKeyHybrid.value,
-            onDismiss = { ageKeyDialogVisible.value = false },
-            onDismissFinished = {},
         )
     }
 }
