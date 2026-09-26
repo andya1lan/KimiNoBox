@@ -26,10 +26,12 @@ import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.model.GeoXItem
 import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
 import com.github.yumeyucca.yumebox.substore.util.SubStoreDownloadClient
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -43,11 +45,20 @@ internal object GeoXUpdate {
 
     /**
      * Downloads live in a scope of their own, not the page's: leaving the page used to cancel a
-     * download in flight, and the platform HTTP stack behind Ktor's Android engine then throws
-     * `IllegalStateException: Unbalanced enter/exit` from the cancel handler on the main thread,
-     * which crashed the app.
+     * download in flight, and the platform HTTP stack behind Ktor's Android engine (the client's
+     * engine then) threw `IllegalStateException: Unbalanced enter/exit` from the cancel handler
+     * on the main thread, which crashed the app. Anything else that goes wrong (an IO error while
+     * checking a file) ends up in the handler instead of taking the app down.
      */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope =
+        CoroutineScope(
+            SupervisorJob() +
+                Dispatchers.IO +
+                CoroutineExceptionHandler { _, error ->
+                    Timber.e(error, "GeoX update failed")
+                    showToastDialog("GeoX 更新出错：${error.message ?: error.javaClass.simpleName}。没有下载完的文件保持原样")
+                }
+        )
     private val running = AtomicBoolean(false)
 
     fun start(
