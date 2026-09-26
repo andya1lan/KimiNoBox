@@ -31,7 +31,6 @@ import androidx.core.content.FileProvider
 import com.github.yumeyucca.yumebox.App
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
-import com.github.yumeyucca.yumebox.presentation.component.BottomBarDestination
 import com.github.yumeyucca.yumebox.presentation.component.LocalNavigator
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.util.OverrideEditorStore
@@ -126,24 +125,18 @@ internal fun ProfileEditOptionsDialogHost(
         },
         onDismissFinished = {
             onDismissFinished()
-            // KimiNoBox
+            // KimiNoBox: pushed over the profiles page, which reopens this dialog on return
             if (openViewOnDismiss) {
                 openViewOnDismiss = false
-                navigator.replaceAll(
-                    listOf(
-                        Route.Main(initialPage = BottomBarDestination.Config.ordinal),
-                        Route.ProfileConfigView(profileToEdit.uuid.toString(), profileToEdit.name),
-                    )
+                ProfileEditReturn.request(profileToEdit)
+                navigator.push(
+                    Route.ProfileConfigView(profileToEdit.uuid.toString(), profileToEdit.name)
                 )
             }
             if (openPreviewOnDismiss) {
                 openPreviewOnDismiss = false
-                navigator.replaceAll(
-                    listOf(
-                        Route.Main(initialPage = BottomBarDestination.Config.ordinal),
-                        Route.OverrideConfigPreview,
-                    )
-                )
+                ProfileEditReturn.request(profileToEdit)
+                navigator.push(Route.OverrideConfigPreview)
             }
         },
     )

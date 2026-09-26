@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable // KimiNoBox
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -81,7 +82,8 @@ fun MainScreen(
         }
     // Providers is opened above a freshly-created Main(Proxy) route on compact layouts.
     val initialProxyRequested = remember { initialDestination == BottomBarDestination.Proxy }
-    var proxyDestinationCommitted by remember { mutableStateOf(initialProxyRequested) }
+    // KimiNoBox: saved with the pager, so a restored page index still points into the same list
+    var proxyDestinationCommitted by rememberSaveable { mutableStateOf(initialProxyRequested) }
     var pendingDestination by remember { mutableStateOf<BottomBarDestination?>(null) }
     val visibleDestinations =
         remember(proxyDestinationCommitted) {

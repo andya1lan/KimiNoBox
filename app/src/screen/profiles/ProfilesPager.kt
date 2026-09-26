@@ -70,6 +70,7 @@ fun ProfilesPager(
     val overrideConfigViewModel = koinViewModel<OverrideConfigViewModel>()
     val screen = rememberProfilesPagerUi(profilesViewModel, homeViewModel, overrideConfigViewModel)
     val dialogs = rememberProfilesDialogState()
+    ReopenEditOptionsOnReturn(dialogs, screen.profiles) // KimiNoBox
     val pendingImportUrl by MainActivity.pendingImportUrl.collectAsState()
     LaunchedEffect(pendingImportUrl) {
         if (pendingImportUrl != null) {

@@ -26,6 +26,7 @@ package com.github.yumeyucca.yumebox.feature.editor.screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha // KimiNoBox
 import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
@@ -35,8 +36,6 @@ import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.presentation.component.Navigator
 import com.github.yumeyucca.yumebox.presentation.component.SmallTopBar
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
-import com.github.yumeyucca.yumebox.presentation.icon.yume.ArrowLeft
-import com.github.yumeyucca.yumebox.presentation.icon.yume.ArrowRight
 import com.github.yumeyucca.yumebox.presentation.icon.yume.ListCollapse
 import com.github.yumeyucca.yumebox.presentation.icon.yume.Save
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
@@ -46,6 +45,10 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.icon.MiuixIcons // KimiNoBox
+import top.yukonga.miuix.kmp.icon.extended.Back // KimiNoBox
+import top.yukonga.miuix.kmp.icon.extended.Redo // KimiNoBox
+import top.yukonga.miuix.kmp.icon.extended.Undo // KimiNoBox
 
 @Composable
 fun ConfigPreviewScreen(
@@ -81,26 +84,52 @@ fun ConfigPreviewScreen(
             SmallTopBar(
                 title = title,
                 scrollBehavior = scrollBehavior,
+                // KimiNoBox: a real back button; undo and redo moved next to format and save
                 navigationIcon = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(UiDp.dp12)) {
-                        IconButton(
-                            onClick = { editorState.undo() },
-                            enabled = editorState.canUndo(),
-                        ) {
-                            Icon(Yume.ArrowLeft, null)
-                        }
-                        IconButton(
-                            onClick = { editorState.redo() },
-                            enabled = editorState.canRedo(),
-                        ) {
-                            Icon(Yume.ArrowRight, null)
-                        }
+                    IconButton(onClick = { navigator.navigateUp() }) {
+                        Icon(MiuixIcons.Back, contentDescription = YumeTxt.Component.Navigation.Back)
                     }
                 },
                 actions = {
+                    // KimiNoBox: miuix does not dim a disabled IconButton, so the icon fades itself
+                    val canUndo = editorState.canUndo()
+                    val canRedo = editorState.canRedo()
                     IconButton(
                         modifier = Modifier.padding(end = UiDp.dp12),
-                        onClick = { editorState.format() },
+                        onClick = { editorState.undo() },
+                        enabled = canUndo,
+                    ) {
+                        Icon(
+                            MiuixIcons.Undo,
+                            contentDescription = "撤销",
+                            modifier = Modifier.alpha(if (canUndo) 1f else DISABLED_ALPHA),
+                        )
+                    }
+                    IconButton(
+                        modifier = Modifier.padding(end = UiDp.dp12),
+                        onClick = { editorState.redo() },
+                        enabled = canRedo,
+                    ) {
+                        Icon(
+                            MiuixIcons.Redo,
+                            contentDescription = "重做",
+                            modifier = Modifier.alpha(if (canRedo) 1f else DISABLED_ALPHA),
+                        )
+                    }
+                    IconButton(
+                        modifier = Modifier.padding(end = UiDp.dp12),
+                        onClick = {
+                            // KimiNoBox: say why nothing changed
+                            if (!editorState.format()) {
+                                context.toast(
+                                    if (CodeFormatter.format(editorState.content, language) == null) {
+                                        "内容有语法错误，无法格式化"
+                                    } else {
+                                        "已是标准格式"
+                                    }
+                                )
+                            }
+                        },
                     ) {
                         Icon(
                             Yume.ListCollapse,
@@ -110,6 +139,11 @@ fun ConfigPreviewScreen(
                     IconButton(
                         onClick = {
                             if (isSaving || onSave == null) return@IconButton
+                            // KimiNoBox: saving stays enabled so an unmodified save can say so
+                            if (!editorState.isModified) {
+                                context.toast("没有修改")
+                                return@IconButton
+                            }
                             coroutineScope.launch {
                                 isSaving = true
                                 runCatching { onSave(editorState.content) }
@@ -125,9 +159,13 @@ fun ConfigPreviewScreen(
                                 isSaving = false
                             }
                         },
-                        enabled = onSave != null && editorState.isModified && !isSaving,
+                        enabled = onSave != null && !isSaving, // KimiNoBox
                     ) {
-                        Icon(Yume.Save, contentDescription = YumeTxt.Editor.Action.Save)
+                        Icon(
+                            Yume.Save,
+                            contentDescription = YumeTxt.Editor.Action.Save,
+                            modifier = Modifier.alpha(if (onSave != null) 1f else DISABLED_ALPHA), // KimiNoBox
+                        )
                     }
                 },
             )
@@ -145,3 +183,5 @@ fun ConfigPreviewScreen(
         }
     }
 }
+
+private const val DISABLED_ALPHA = 0.3f // KimiNoBox
