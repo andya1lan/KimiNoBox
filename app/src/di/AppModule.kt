@@ -21,6 +21,7 @@
 package com.github.yumeyucca.yumebox.di
 
 import com.github.yumeyucca.yumebox.screen.home.HomeViewModel
+import com.github.yumeyucca.yumebox.nodesource.nodeSourceModule // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.log.LogViewModel
 import com.github.yumeyucca.yumebox.screen.profiles.ProfilesViewModel
 import com.github.yumeyucca.yumebox.screen.rules.RulesViewModel
@@ -75,6 +76,7 @@ val appViewModelModule = module {
 val appModule: List<Module> =
     coreDiModules +
             listOf(appIntegrationModule, appViewModelModule) +
+            listOf(nodeSourceModule) + // KimiNoBox
             featureSubStoreModules +
             featureProxyModules +
             featureOverrideModules +

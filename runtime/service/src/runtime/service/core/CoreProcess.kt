@@ -31,6 +31,7 @@ import android.os.SystemClock
 import android.system.Os
 import com.github.yumeyucca.yumebox.core.bridge.Channel
 import com.github.yumeyucca.yumebox.core.bridge.NativeProcess
+import com.github.yumeyucca.yumebox.core.model.ProxyProviderDetail // KimiNoBox
 import com.github.yumeyucca.yumebox.core.model.RunMode
 import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
 import com.github.yumeyucca.yumebox.runtime.api.CoreApi
@@ -646,6 +647,10 @@ class CoreProcess(private val context: Context) {
         /** KimiNoBox: [CoreController.proxyProviderSizes] of the local core. */
         suspend fun proxyProviderSizes(context: Context): Map<String, Int> =
             sharedController(context).proxyProviderSizes()
+
+        /** KimiNoBox: [CoreController.proxyProviderDetails] of the local core. */
+        suspend fun proxyProviderDetails(context: Context): List<ProxyProviderDetail> =
+            sharedController(context).proxyProviderDetails()
 
         /** Suspendable startup probe so launch deadlines are not hidden by the synchronous API. */
         internal suspend fun probeController(context: Context) {

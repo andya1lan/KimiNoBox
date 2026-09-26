@@ -132,17 +132,16 @@ class NodeSourceTemplateTest {
     }
 
     @Test
-    fun anEmptyPrefixFieldFollowsTheName() {
+    fun thePrefixIsOnlyWhatWasTyped() {
         val input = NodeSourceInput(name = "✈️ air", url = "https://e.com/s")
 
-        assertEquals("✈️ air ", NodeSourceTemplate.formFor(input, null) { "k3n8x2qa" }.prefix)
-        assertEquals("", NodeSourceTemplate.formFor(input.copy(noPrefix = true), null) { "k3n8x2qa" }.prefix)
+        assertEquals("3600", input.interval)
+        assertEquals("", NodeSourceTemplate.formFor(input, null) { "k3n8x2qa" }.prefix)
         assertEquals("A ", NodeSourceTemplate.formFor(input.copy(prefix = "A "), null) { "k3n8x2qa" }.prefix)
 
         val saved = NodeSourceForm("air", "https://e.com/s", 60, "air ", "k3n8x2qa")
-        assertEquals(NodeSourceInput("air", "https://e.com/s", "60", ""), NodeSourceTemplate.inputOf(saved))
-        assertTrue(NodeSourceTemplate.inputOf(saved.copy(prefix = "")).noPrefix)
-        assertEquals("A ", NodeSourceTemplate.inputOf(saved.copy(prefix = "A ")).prefix)
+        assertEquals(NodeSourceInput("air", "https://e.com/s", "60", "air "), NodeSourceTemplate.inputOf(saved))
+        assertEquals("", NodeSourceTemplate.inputOf(saved.copy(prefix = "")).prefix)
     }
 
     @Test
@@ -178,5 +177,16 @@ class NodeSourceTemplateTest {
             NodeTemplates.providerNames("proxy-providers:\n  a: {}\n+proxy-providers-merge:\n  b: {}\n"),
         )
         assertEquals(emptySet<String>(), NodeTemplates.providerNames("function main(c) { return c }"))
+    }
+
+    @Test
+    fun aNewSourceUpdatesHourlyUnlessChanged() {
+        val input = NodeSourceInput(name = "air", url = "https://example.com/sub")
+        assertEquals("3600", input.interval)
+        val form = NodeSourceTemplate.formFor(input, original = null) { "k3n8x2qa" }
+        assertEquals(3_600L, form.intervalSeconds)
+        assertTrue(NodeSourceTemplate.render(form).contains("interval: 3600"))
+        val changed = NodeSourceTemplate.formFor(input.copy(interval = "7200"), original = null) { "k3n8x2qa" }
+        assertTrue(NodeSourceTemplate.render(changed).contains("interval: 7200"))
     }
 }

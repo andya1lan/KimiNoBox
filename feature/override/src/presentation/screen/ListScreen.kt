@@ -33,6 +33,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
+import com.github.yumeyucca.yumebox.nodesource.NodeSourceTemplate // KimiNoBox
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind // KimiNoBox
 import com.github.yumeyucca.yumebox.nodesource.NodeText // KimiNoBox
 import com.github.yumeyucca.yumebox.presentation.component.*
@@ -88,6 +89,8 @@ private fun rememberOverrideListDialogState(): OverrideListDialogState = remembe
 @Composable
 fun OverrideListScreen(
     onOpenCodeEditor: (OverrideConfig) -> Unit,
+    /** KimiNoBox: opens the subscription node source screen; null id for a new source. */
+    onOpenNodeSource: (String?) -> Unit,
     viewModel: OverrideConfigViewModel = koinViewModel(),
 ) {
     val vmState = rememberOverrideListVmState(viewModel)
@@ -227,15 +230,17 @@ fun OverrideListScreen(
         )
         return
     }
-    // KimiNoBox: a node source opens its form, or the YAML editor once it was edited by hand.
+    // KimiNoBox: a node source opens its screen, or the YAML editor once it was edited by hand.
     val openNodeSource: (OverrideConfig) -> Unit = { config ->
         val content = viewModel.getConfigContent(config.id) ?: config.content
         val target = NodeEditorTarget.of(config.copy(content = content))
-        if (target != null) {
-            nodeEditor = target
-        } else {
-            context.toast(NodeText.OPENED_AS_YAML)
-            onOpenCodeEditor(config)
+        when {
+            NodeSourceTemplate.parse(content) != null -> onOpenNodeSource(config.id)
+            target != null -> nodeEditor = target
+            else -> {
+                context.toast(NodeText.OPENED_AS_YAML)
+                onOpenCodeEditor(config)
+            }
         }
     }
 
@@ -374,7 +379,10 @@ fun OverrideListScreen(
             // KimiNoBox
             onConfirmTemplate = { kind ->
                 showCreateDialog.value = false
-                nodeEditor = NodeEditorTarget.New(kind)
+                when (kind) {
+                    NodeTemplateKind.NodeSource -> onOpenNodeSource(null)
+                    NodeTemplateKind.SelfNodes -> nodeEditor = NodeEditorTarget.NewSelfNodes
+                }
             },
         )
 

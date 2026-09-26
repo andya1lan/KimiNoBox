@@ -507,6 +507,22 @@ class CoreController(
             entry.name.ifBlank { key } to entry.proxies.size
         }
 
+    /** KimiNoBox: every proxy provider with its nodes, update time and subscription usage. */
+    suspend fun proxyProviderDetails(): List<ProxyProviderDetail> =
+        fetchProvidersResponse("proxies").providers.map { (key, entry) ->
+            val info = entry.subscriptionInfo
+            ProxyProviderDetail(
+                name = entry.name.ifBlank { key },
+                vehicleType = entry.vehicleType,
+                updatedAt = parseUpdatedAtMillis(entry.updatedAt).takeIf { it > 0L },
+                nodeNames = entry.proxies.map { it.name },
+                upload = info?.upload,
+                download = info?.download,
+                total = info?.total,
+                expire = info?.expire?.takeIf { it > 0L },
+            )
+        }
+
     private suspend fun fetchProvidersResponse(category: String): RawProvidersResponse {
         val raw = request(HttpMethod.Get, "providers", category).bodyAsText()
         return json.decodeFromString<RawProvidersResponse>(raw)

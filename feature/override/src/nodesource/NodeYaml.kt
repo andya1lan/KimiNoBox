@@ -78,6 +78,17 @@ internal object NodeYaml {
     /** The single document of [text]; null when it is empty. Throws on invalid YAML. */
     fun compose(text: String): Node? = Compose(loadSettings).composeString(text).orElse(null)
 
+    private val inspectSettings =
+        LoadSettings.builder()
+            .setSchema(schema)
+            .setCodePointLimit(CODE_POINT_LIMIT)
+            .setMaxAliasesForCollections(MAX_ALIASES)
+            .setUseMarks(false)
+            .build()
+
+    /** [compose] without source positions, for reading large subscriptions; errors lose their line. */
+    fun composeForInspection(text: String): Node? = Compose(inspectSettings).composeString(text).orElse(null)
+
     /** [indentSequences] false starts a top-level list at column 0 (the paste editor). */
     fun serialize(root: Node, indentSequences: Boolean = true): String {
         val settings = if (indentSequences) nestedDumpSettings else flatDumpSettings

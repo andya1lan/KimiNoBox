@@ -126,6 +126,7 @@ class CompiledConfigPipeline(private val context: Context) {
     suspend fun compileDetailed(spec: RuntimeSpec): CompiledRuntimeConfig =
         withContext(Dispatchers.Default) {
             if (spec.compiledFinalYaml.isNotBlank()) {
+                NodeSourceCacheSeeder.seed(context, File(spec.profileDir), spec.compiledFinalYaml) // KimiNoBox
                 return@withContext CompiledRuntimeConfig(
                     finalYaml = spec.compiledFinalYaml,
                     proxyGroupNames =
@@ -143,6 +144,7 @@ class CompiledConfigPipeline(private val context: Context) {
                     ),
                 )
             check(result.success) { result.error ?: "override compile failed" }
+            NodeSourceCacheSeeder.seed(context, File(spec.profileDir), result.finalYaml) // KimiNoBox
             CompiledRuntimeConfig(
                 finalYaml = result.finalYaml,
                 proxyGroupNames = extractProxyGroupNames(result.finalYaml),

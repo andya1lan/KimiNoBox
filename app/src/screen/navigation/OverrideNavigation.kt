@@ -61,6 +61,7 @@ fun OverrideScreen(navigator: Navigator) {
             )
             navigator.push(Route.OverrideConfigPreview)
         },
+        onOpenNodeSource = { id -> navigator.push(Route.NodeSourceEdit(overrideId = id)) }, // KimiNoBox
     )
 }
 

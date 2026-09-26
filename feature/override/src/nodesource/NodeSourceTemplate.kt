@@ -40,13 +40,9 @@ data class NodeSourceInput(
     val name: String = "",
     val url: String = "",
     val interval: String = NodeSourceTemplate.DEFAULT_INTERVAL_SECONDS.toString(),
-    /** Empty follows the name ("name + space"), unless [noPrefix]. */
+    /** Added before every node name; empty (the default) adds none. */
     val prefix: String = "",
-    val noPrefix: Boolean = false,
-) {
-    val effectivePrefix: String
-        get() = if (noPrefix) "" else prefix.ifEmpty { NodeSourceTemplate.defaultPrefix(name) }
-}
+)
 
 data class NodeSourceProblems(
     val name: String? = null,
@@ -75,13 +71,16 @@ data class NodeSourceProblems(
  * `--test`, which runs before any override adds the provider.
  */
 object NodeSourceTemplate {
-    const val DEFAULT_INTERVAL_SECONDS = 86_400L
+    /** A new source updates hourly; the subscription's `Profile-Update-Interval` is not read. */
+    const val DEFAULT_INTERVAL_SECONDS = 3_600L
+
     private const val PATH_ID_LENGTH = 8
     private const val PATH_ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
     private val pathPattern = Regex("""\./providers/src-([a-z0-9]{$PATH_ID_LENGTH})\.yaml""")
     private val urlPattern = Regex("""^https?://\S+$""", RegexOption.IGNORE_CASE)
     private val bodyKeys = setOf("type", "url", "interval", "path", "override")
 
+    /** The prefix that marks every node of [name] with the source name, for the duplicate fix. */
     fun defaultPrefix(name: String): String = "$name "
 
     fun newPathId(random: Random = Random.Default): String =
@@ -137,32 +136,32 @@ object NodeSourceTemplate {
         return NodeSourceForm(name, url, interval, prefix, pathId)
     }
 
-    /** A saved prefix equal to the default keeps following the name. */
     fun inputOf(form: NodeSourceForm): NodeSourceInput =
         NodeSourceInput(
             name = form.name,
             url = form.url,
             interval = form.intervalSeconds.toString(),
-            prefix = form.prefix.takeUnless { it == defaultPrefix(form.name) }.orEmpty(),
-            noPrefix = form.prefix.isEmpty(),
+            prefix = form.prefix,
         )
 
     /** [takenNames]: provider names of the other node sources. */
     fun validate(input: NodeSourceInput, takenNames: Set<String>): NodeSourceProblems {
         val interval = input.interval.trim()
         return NodeSourceProblems(
-            name =
-                NodeTemplates.nameProblem(input.name)
-                    ?: NodeText.NAME_TAKEN.takeIf { input.name in takenNames },
+            name = nameProblem(input.name, takenNames),
             url = NodeText.URL_INVALID.takeUnless { urlPattern.matches(input.url.trim()) },
             interval =
                 NodeText.INTERVAL_INVALID.takeUnless {
                     interval.all(Char::isDigit) &&
                         (interval.toLongOrNull() ?: -1L) in 0L..Int.MAX_VALUE.toLong()
                 },
-            prefix = NodeText.CONTROL_CHARS.takeIf { input.effectivePrefix.any(Char::isISOControl) },
+            prefix = NodeText.CONTROL_CHARS.takeIf { input.prefix.any(Char::isISOControl) },
         )
     }
+
+    /** Problem with [name] as a node source name, given the names [takenNames] of the others. */
+    fun nameProblem(name: String, takenNames: Set<String>): String? =
+        NodeTemplates.nameProblem(name) ?: NodeText.NAME_TAKEN.takeIf { name in takenNames }
 
     /**
      * The form to save for a valid [input]. [original] is the saved form when editing: a changed
@@ -179,7 +178,7 @@ object NodeSourceTemplate {
             name = input.name,
             url = url,
             intervalSeconds = input.interval.trim().toLong(),
-            prefix = input.effectivePrefix,
+            prefix = input.prefix,
             pathId = original?.takeIf { it.url == url }?.pathId ?: generatePathId(),
         )
     }

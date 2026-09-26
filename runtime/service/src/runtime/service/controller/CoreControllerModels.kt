@@ -32,6 +32,16 @@ internal data class RawProvider(
     val vehicleType: String = "",
     val updatedAt: String? = null,
     val proxies: List<RawProxy> = emptyList(),
+    val subscriptionInfo: RawSubscriptionInfo? = null, // KimiNoBox
+)
+
+/** KimiNoBox: mihomo's `SubscriptionInfo`, serialized with Go's field names. */
+@Serializable
+internal data class RawSubscriptionInfo(
+    @kotlinx.serialization.SerialName("Upload") val upload: Long = 0L,
+    @kotlinx.serialization.SerialName("Download") val download: Long = 0L,
+    @kotlinx.serialization.SerialName("Total") val total: Long = 0L,
+    @kotlinx.serialization.SerialName("Expire") val expire: Long = 0L,
 )
 
 @Serializable

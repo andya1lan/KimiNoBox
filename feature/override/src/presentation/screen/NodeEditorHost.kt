@@ -30,8 +30,6 @@ import com.github.yumeyucca.yumebox.data.model.OverrideConfig
 import com.github.yumeyucca.yumebox.data.model.OverrideContentType
 import com.github.yumeyucca.yumebox.data.model.OverrideMetadata
 import com.github.yumeyucca.yumebox.data.store.OverrideConfigStore
-import com.github.yumeyucca.yumebox.nodesource.NodeSourceForm
-import com.github.yumeyucca.yumebox.nodesource.NodeSourceTemplate
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplates
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesForm
@@ -40,27 +38,19 @@ import com.github.yumeyucca.yumebox.presentation.viewmodel.OverrideConfigViewMod
 import org.koin.compose.koinInject
 import tf.gal.yumebox.locale.YumeTxt
 
-/** KimiNoBox: which node source form the override list shows in place of itself. */
+/**
+ * KimiNoBox: the self-nodes page the override list shows in place of itself. Subscription node
+ * sources have their own screen in the app, opened through `onOpenNodeSource`.
+ */
 internal sealed interface NodeEditorTarget {
-    data class New(val kind: NodeTemplateKind) : NodeEditorTarget
-
-    data class EditNodeSource(val config: OverrideConfig, val form: NodeSourceForm) :
-        NodeEditorTarget
+    data object NewSelfNodes : NodeEditorTarget
 
     class EditSelfNodes(val config: OverrideConfig, val form: SelfNodesForm) : NodeEditorTarget
 
     companion object {
-        /** The form of a saved node source override; null once it was edited by hand. */
+        /** The page of a saved self-nodes override; null once it was edited by hand. */
         fun of(config: OverrideConfig): NodeEditorTarget? =
-            when (NodeTemplateKind.of(config.content)) {
-                NodeTemplateKind.NodeSource ->
-                    NodeSourceTemplate.parse(config.content)?.let { EditNodeSource(config, it) }
-
-                NodeTemplateKind.SelfNodes ->
-                    SelfNodesTemplate.parse(config.content)?.let { EditSelfNodes(config, it) }
-
-                null -> null
-            }
+            SelfNodesTemplate.parse(config.content)?.let { EditSelfNodes(config, it) }
     }
 }
 
@@ -80,9 +70,8 @@ internal fun NodeEditorHost(
     val userConfigs by viewModel.userConfigs.collectAsState()
     val editing =
         when (target) {
-            is NodeEditorTarget.EditNodeSource -> target.config
             is NodeEditorTarget.EditSelfNodes -> target.config
-            is NodeEditorTarget.New -> null
+            NodeEditorTarget.NewSelfNodes -> null
         }
     val takenNames =
         remember(userConfigs, editing?.id) {
@@ -105,30 +94,11 @@ internal fun NodeEditorHost(
     }
 
     when (target) {
-        is NodeEditorTarget.New ->
-            when (target.kind) {
-                NodeTemplateKind.NodeSource ->
-                    NodeSourceEditorScreen(
-                        original = null,
-                        takenNames = takenNames,
-                        onSave = { form -> save(form.name, NodeSourceTemplate.render(form)) },
-                        onClose = onClose,
-                    )
-
-                NodeTemplateKind.SelfNodes ->
-                    SelfNodesEditorScreen(
-                        original = null,
-                        takenNames = takenNames,
-                        onSave = { form -> save(form.name, SelfNodesTemplate.render(form)) },
-                        onClose = onClose,
-                    )
-            }
-
-        is NodeEditorTarget.EditNodeSource ->
-            NodeSourceEditorScreen(
-                original = target.form,
+        NodeEditorTarget.NewSelfNodes ->
+            SelfNodesEditorScreen(
+                original = null,
                 takenNames = takenNames,
-                onSave = { form -> save(form.name, NodeSourceTemplate.render(form)) },
+                onSave = { form -> save(form.name, SelfNodesTemplate.render(form)) },
                 onClose = onClose,
             )
 

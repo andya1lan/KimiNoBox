@@ -90,6 +90,10 @@ sealed interface Route {
     @Serializable
     data class ProfileConfigView(val profileUuid: String, val title: String) : Route
 
+    // KimiNoBox: a subscription node source; no id creates one, bound to [bindProfileId] if given
+    @Serializable
+    data class NodeSourceEdit(val overrideId: String? = null, val bindProfileId: String? = null) : Route
+
     @Serializable
     data object Providers : Route
 
