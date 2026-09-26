@@ -57,7 +57,7 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp) // KimiNoBox: was ktor.client.android
     implementation(libs.commons.compress)
     implementation(libs.xz)
     implementation(libs.javet.node.android)

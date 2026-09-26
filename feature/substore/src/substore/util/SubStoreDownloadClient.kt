@@ -25,7 +25,7 @@ import com.github.yumeyucca.yumebox.common.util.ByteFormatter.formatSpeed
 import com.github.yumeyucca.yumebox.common.util.SubscriptionUserAgentDefaults
 import com.github.yumeyucca.yumebox.data.store.AppSettingsStore
 import io.ktor.client.*
-import io.ktor.client.engine.android.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -66,7 +66,10 @@ class SubStoreDownloadClient(
     }
 
     private val client: HttpClient by lazy {
-        HttpClient(Android) {
+        // KimiNoBox: OkHttp, like every other client here. With the Android engine, cancelling a
+        // download mid-read (leaving its page) closes the platform stream on the main thread,
+        // which throws "Unbalanced enter/exit" from the cancel handler and kills the app.
+        HttpClient(OkHttp) {
             install(HttpTimeout) {
                 connectTimeoutMillis = 15_000
                 socketTimeoutMillis = 60_000
