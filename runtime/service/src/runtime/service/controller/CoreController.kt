@@ -41,6 +41,9 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull // KimiNoBox
+import kotlinx.serialization.json.jsonObject // KimiNoBox
+import kotlinx.serialization.json.jsonPrimitive // KimiNoBox
 import timber.log.Timber
 import java.time.Instant
 
@@ -533,8 +536,25 @@ class CoreController(
 
     override suspend fun updateProvider(type: Provider.Type, name: String) {
         val category = if (type == Provider.Type.Proxy) "proxies" else "rules"
-        request(HttpMethod.Put, "providers", category, name)
+        // KimiNoBox: the core puts the reason of a failed update (download error, HTTP status)
+        // into the body; the HTTP exception message would bury it behind the request line.
+        try {
+            request(HttpMethod.Put, "providers", category, name)
+        } catch (error: ResponseException) {
+            throw IllegalStateException(coreMessage(error.response) ?: error.message, error)
+        }
     }
+
+    /** KimiNoBox: `message` of a core error body such as `{"message":"404 Not Found"}`. */
+    private suspend fun coreMessage(response: HttpResponse): String? =
+        runCatching {
+                json.parseToJsonElement(response.bodyAsText())
+                    .jsonObject["message"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+            }
+            .getOrNull()
+            ?.takeIf(String::isNotBlank)
 
     override suspend fun queryConfigurationAsync(): UiConfiguration = UiConfiguration()
 
