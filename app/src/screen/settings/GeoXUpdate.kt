@@ -20,9 +20,18 @@
 
 package com.github.yumeyucca.yumebox.screen.settings
 
+import android.content.Context
+import com.github.yumeyucca.yumebox.common.util.showToastDialog
+import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.model.GeoXItem
+import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
 import com.github.yumeyucca.yumebox.substore.util.SubStoreDownloadClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * KimiNoBox: GeoX updates that never cost the working files. The download client deletes its
@@ -31,6 +40,36 @@ import java.io.File
  */
 internal object GeoXUpdate {
     data class Result(val updated: List<GeoXItem>, val failed: List<GeoXItem>)
+
+    /**
+     * Downloads live in a scope of their own, not the page's: leaving the page used to cancel a
+     * download in flight, and the platform HTTP stack behind Ktor's Android engine then throws
+     * `IllegalStateException: Unbalanced enter/exit` from the cancel handler on the main thread,
+     * which crashed the app.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val running = AtomicBoolean(false)
+
+    fun start(
+        context: Context,
+        client: SubStoreDownloadClient,
+        items: List<GeoXItem>,
+        vpnRunning: () -> Boolean,
+    ) {
+        if (!running.compareAndSet(false, true)) {
+            context.toast("GeoX 正在更新，完成后会提示")
+            return
+        }
+        scope.launch {
+            try {
+                val result = download(client, context.runtimeHomeDir, items)
+                val message = message(result, vpnRunning())
+                if (result.failed.isEmpty()) context.toast(message) else showToastDialog(message)
+            } finally {
+                running.set(false)
+            }
+        }
+    }
 
     private const val PARTIAL_SUFFIX = ".download"
 
