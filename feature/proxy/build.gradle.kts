@@ -38,6 +38,7 @@ dependencies {
     implementation(project(":ui"))
     implementation(project(":data"))
     implementation(project(":runtime:client"))
+    implementation(project(":runtime:api")) // KimiNoBox: runtime snapshot for the open group reload
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

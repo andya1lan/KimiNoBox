@@ -35,6 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -106,6 +107,10 @@ internal class RuntimeSession(private val deps: RuntimeSessionDeps) {
     private val _isConfigReloading = MutableStateFlow(false)
     val isConfigReloading: StateFlow<Boolean> = _isConfigReloading.asStateFlow()
 
+    // KimiNoBox: counts the profile and override changes the runtime was told about
+    private val _configRevision = MutableStateFlow(0L)
+    val configRevision: StateFlow<Long> = _configRevision.asStateFlow()
+
     private val _currentProfile = MutableStateFlow<Profile?>(null)
     val currentProfile: StateFlow<Profile?> = _currentProfile.asStateFlow()
 
@@ -156,7 +161,10 @@ internal class RuntimeSession(private val deps: RuntimeSessionDeps) {
                 }
             },
             onRuntimeStopped = { reason -> scope.launch { handleStopped(reason) } },
-            onConfigChanged = { scope.launch { onConfigChanged() } },
+            onConfigChanged = {
+                _configRevision.update { it + 1 } // KimiNoBox
+                scope.launch { onConfigChanged() }
+            },
             onReconcile = { scope.launch { reconcileAndRefresh() } },
             onRootFailed = { error -> scope.launch { handleFailure(error) } },
         )

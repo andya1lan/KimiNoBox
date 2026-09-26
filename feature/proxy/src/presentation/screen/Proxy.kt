@@ -102,6 +102,9 @@ fun ProxyPager(
             controlledSelectedGroupName = if (inSplitShell) uiSelectedGroupName else null,
             onControlledSelectedGroupNameChange =
                 if (inSplitShell) proxyViewModel::selectUiGroup else null,
+            configKey = proxyViewModel.loadedConfigKey.collectAsState().value, // KimiNoBox
+            controlledOpenedKey = proxyViewModel.uiSelectedGroupKey.collectAsState().value, // KimiNoBox
+            onControlledOpenedKeyChange = proxyViewModel::setUiSelectedGroupKey, // KimiNoBox
     )
     val selectedGroupName = groupSelection.selectedGroupName
     val displayGroup = groupSelection.displayGroup
@@ -361,6 +364,9 @@ internal fun ProxyShellNodeDetailContent(
             retainLastKnownGroup = true,
             controlledSelectedGroupName = uiSelectedGroupName,
             onControlledSelectedGroupNameChange = proxyViewModel::selectUiGroup,
+            configKey = proxyViewModel.loadedConfigKey.collectAsState().value, // KimiNoBox
+            controlledOpenedKey = proxyViewModel.uiSelectedGroupKey.collectAsState().value, // KimiNoBox
+            onControlledOpenedKeyChange = proxyViewModel::setUiSelectedGroupKey, // KimiNoBox
         )
     val selectedGroupName = groupSelection.selectedGroupName
     val displayGroup = groupSelection.displayGroup

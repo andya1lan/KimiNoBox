@@ -69,6 +69,14 @@ class ProxyViewModel(
         _uiSelectedGroupName.value = name
     }
 
+    // KimiNoBox: the config key the shared selection was opened under, see [loadedConfigKey]
+    private val _uiSelectedGroupKey = MutableStateFlow<String?>(null)
+    val uiSelectedGroupKey: StateFlow<String?> = _uiSelectedGroupKey.asStateFlow()
+
+    fun setUiSelectedGroupKey(key: String?) {
+        _uiSelectedGroupKey.value = key
+    }
+
     private val groupSorter = ProxyGroupSorter()
 
     val sortMode: StateFlow<ProxySortMode> =
@@ -84,6 +92,20 @@ class ProxyViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val activeSyncSources = mutableSetOf<String>()
+
+    /**
+     * KimiNoBox: which config the page shows the groups of: the current profile, whether the VPN
+     * core runs it, and the count of profile and override changes. An open group closes when this
+     * differs from the key it was opened under. Null while the profile is unknown, which it is for
+     * a moment on every reconcile; node picks, delay tests, provider updates and traffic ticks
+     * change none of the parts.
+     */
+    val loadedConfigKey: StateFlow<String?> =
+        combine(proxyFacade.currentProfile, proxyFacade.isRunning, proxyFacade.configRevision) { profile, running, revision ->
+                profile?.uuid?.let { uuid -> "$uuid/${if (running) "vpn" else "idle"}/$revision" }
+            }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
         proxyFacade.warmUpProxyGroups()

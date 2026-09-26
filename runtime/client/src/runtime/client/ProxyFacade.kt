@@ -99,6 +99,10 @@ class ProxyFacade(
     val trafficTotal: StateFlow<Traffic>
     val proxyGroups: StateFlow<List<ProxyGroupInfo>>
     val nodeSession: StateFlow<NodeSessionState> = _nodeSession.asStateFlow()
+
+    /** KimiNoBox: goes up on every profile or override change the runtime was told about. */
+    val configRevision: StateFlow<Long>
+        get() = session.configRevision
     val resolvedPrimaryNode: StateFlow<Proxy?>
 
     init {
