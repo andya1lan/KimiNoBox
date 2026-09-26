@@ -24,7 +24,11 @@ package com.github.yumeyucca.yumebox.presentation.screen.node
 
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.github.yumeyucca.yumebox.data.model.ProxySortMode
+import com.github.yumeyucca.yumebox.data.store.ProxyDisplaySettingsStore
+import org.koin.compose.koinInject
 import tf.gal.yumebox.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
@@ -43,6 +47,8 @@ internal fun NodeSortPopup(
     onLocateCurrentProxy: (() -> Unit)? = null,
     onSortSelected: (ProxySortMode) -> Unit,
 ) {
+    val settings: ProxyDisplaySettingsStore = koinInject() // KimiNoBox
+    val groupBySource by settings.groupBySource.state.collectAsState() // KimiNoBox
     val entries =
         buildList {
             onLocateCurrentProxy?.let { locateCurrentProxy ->
@@ -58,6 +64,19 @@ internal fun NodeSortPopup(
                     )
                 )
             }
+            // KimiNoBox: the node list in sections by node source (C6)
+            add(
+                DropdownEntry(
+                    items =
+                        listOf(
+                            DropdownItem(
+                                text = "按节点源分组",
+                                selected = groupBySource,
+                                onClick = { settings.groupBySource.set(!groupBySource) },
+                            )
+                        ),
+                )
+            )
             add(
                 DropdownEntry(
                     items =

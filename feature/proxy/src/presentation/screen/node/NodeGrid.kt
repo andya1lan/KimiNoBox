@@ -51,11 +51,12 @@ internal fun LazyListScope.nodeGridItems(
     outerHorizontalPadding: Dp = UiDp.dp0,
     itemVerticalPadding: Dp = UiDp.dp0,
     revealCount: Int = Int.MAX_VALUE,
+    keyPrefix: String = "", // KimiNoBox: keeps keys unique when a list shows several runs
 ) {
     itemsIndexed(
         items = proxies,
         // KimiNoBox: index + name; duplicate node names across providers crashed the list
-        key = { index, proxy -> "$index:${proxy.name}" },
+        key = { index, proxy -> "$keyPrefix$index:${proxy.name}" },
         contentType = { _, _ -> "NodeCard1" },
     ) { index, proxy ->
         NodeCard(

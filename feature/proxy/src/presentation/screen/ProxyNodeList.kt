@@ -48,6 +48,7 @@ import com.github.yumeyucca.yumebox.presentation.theme.rowReveal
 import com.github.yumeyucca.yumebox.presentation.util.KeepLazyListTopAnchorOnReorder
 import com.github.yumeyucca.yumebox.presentation.viewmodel.ProxyDelayTestProgress
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 
 private fun ProxyGroupInfo.filterNodes(query: String): List<Proxy> {
@@ -87,6 +88,20 @@ internal fun NodeListPage(
     if (group == null) return
     val spacing = LocalSpacing.current
     val visibleProxies = remember(group.proxies, searchQuery) { group.filterNodes(searchQuery) }
+    // KimiNoBox: sections by node source (C6), when the setting is on and the group mixes sources
+    val sections = rememberNodeSourceSections(group, visibleProxies)
+    val coroutineScope = rememberCoroutineScope()
+
+    // KimiNoBox: the page's own locate counts cards only; among sections, count their headers too
+    fun locateIn(scrollTo: suspend (Int) -> Unit): (() -> Unit)? {
+        if (sections == null || onLocateCurrentProxy == null) return onLocateCurrentProxy
+        return {
+            NodeSourceSections.position(sections, group.now)?.let { position ->
+                // The item above the current card, as the page's own locate does
+                coroutineScope.launch { scrollTo(position + 1) }
+            }
+        }
+    }
     val listItemKeys = remember(group.proxies) { group.proxies.map { it.name } }
     val resolvedGridState = if (useAdaptiveGrid) gridState ?: rememberLazyGridState() else null
     val revealCount =
@@ -175,7 +190,7 @@ internal fun NodeListPage(
                         onShowMorePopupChange = onShowMorePopupChange,
                         onSortSelected = onSortSelected,
                         onTestDelay = onTestDelay,
-                        onLocateCurrentProxy = onLocateCurrentProxy,
+                        onLocateCurrentProxy = locateIn { resolvedGridState.animateLocateToItem(it) },
                     )
                 }
                 item(key = "__refresh_indicator__", span = { GridItemSpan(maxLineSpan) }) {
@@ -185,23 +200,32 @@ internal fun NodeListPage(
                         progress = delayTestProgress,
                     )
                 }
-                // KimiNoBox: index + name; duplicate node names across providers crashed the grid
-                itemsIndexed(items = visibleProxies, key = { index, proxy -> "$index:${proxy.name}" }) { index, proxy ->
-                    NodeCard(
-                        proxy = proxy,
-                        isSelected = proxy.name == group.now,
-                        onClick = { proxyName ->
-                            if (group.isSelectable) {
-                                onSelectProxy(group.name, proxyName)
-                            } else {
-                                onTestDelay()
-                            }
-                        },
-                        onTestClick = onTestProxyDelay,
-                        isDelayTesting = testingProxyNames.contains(proxy.name),
-                        showCountryFlag = true,
-                        modifier = Modifier.rowReveal(rememberRowShown(index, revealCount)).fillMaxWidth(),
-                    )
+                // KimiNoBox: one run of cards per section, each under a full-width header
+                (sections ?: listOf(NodeSourceSections.Section("", visibleProxies))).forEachIndexed { sectionIndex, section ->
+                    if (sections != null) {
+                        item(key = "__source_${sectionIndex}__", span = { GridItemSpan(maxLineSpan) }) {
+                            NodeSourceSectionHeader(section.title, section.proxies.size)
+                        }
+                    }
+                    val keyPrefix = if (sections == null) "" else "$sectionIndex/"
+                    // KimiNoBox: index + name; duplicate node names across providers crashed the grid
+                    itemsIndexed(items = section.proxies, key = { index, proxy -> "$keyPrefix$index:${proxy.name}" }) { index, proxy ->
+                        NodeCard(
+                            proxy = proxy,
+                            isSelected = proxy.name == group.now,
+                            onClick = { proxyName ->
+                                if (group.isSelectable) {
+                                    onSelectProxy(group.name, proxyName)
+                                } else {
+                                    onTestDelay()
+                                }
+                            },
+                            onTestClick = onTestProxyDelay,
+                            isDelayTesting = testingProxyNames.contains(proxy.name),
+                            showCountryFlag = true,
+                            modifier = Modifier.rowReveal(rememberRowShown(index, revealCount)).fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -225,7 +249,7 @@ internal fun NodeListPage(
                 onShowMorePopupChange = onShowMorePopupChange,
                 onSortSelected = onSortSelected,
                 onTestDelay = onTestDelay,
-                onLocateCurrentProxy = onLocateCurrentProxy,
+                onLocateCurrentProxy = locateIn { listState.animateLocateToItem(it) },
             )
         }
         item(key = "__refresh_indicator__") {
@@ -235,22 +259,29 @@ internal fun NodeListPage(
                 progress = delayTestProgress,
             )
         }
-        nodeGridItems(
-            proxies = visibleProxies,
-            selectedProxyName = group.now,
-            onProxyClick = { proxyName ->
-                if (group.isSelectable) {
-                    onSelectProxy(group.name, proxyName)
-                } else {
-                    onTestDelay()
-                }
-            },
-            onProxyTest = onTestProxyDelay,
-            testingProxyNames = testingProxyNames,
-            outerHorizontalPadding = UiDp.dp0,
-            itemVerticalPadding = UiDp.dp6,
-            revealCount = revealCount,
-        )
+        // KimiNoBox: one run of cards per section, each under its header
+        (sections ?: listOf(NodeSourceSections.Section("", visibleProxies))).forEachIndexed { index, section ->
+            if (sections != null) {
+                item(key = "__source_${index}__") { NodeSourceSectionHeader(section.title, section.proxies.size) }
+            }
+            nodeGridItems(
+                proxies = section.proxies,
+                selectedProxyName = group.now,
+                onProxyClick = { proxyName ->
+                    if (group.isSelectable) {
+                        onSelectProxy(group.name, proxyName)
+                    } else {
+                        onTestDelay()
+                    }
+                },
+                onProxyTest = onTestProxyDelay,
+                testingProxyNames = testingProxyNames,
+                outerHorizontalPadding = UiDp.dp0,
+                itemVerticalPadding = UiDp.dp6,
+                revealCount = revealCount,
+                keyPrefix = if (sections == null) "" else "$index/",
+            )
+        }
     }
 }
 

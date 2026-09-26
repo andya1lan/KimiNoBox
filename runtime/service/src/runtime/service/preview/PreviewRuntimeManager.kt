@@ -8,6 +8,7 @@ package com.github.yumeyucca.yumebox.runtime.service.preview
 
 import android.content.Context
 import com.github.yumeyucca.yumebox.core.model.ProxyGroup
+import com.github.yumeyucca.yumebox.core.model.ProxyProviderDetail
 import com.github.yumeyucca.yumebox.core.model.ProxySort
 import com.github.yumeyucca.yumebox.domain.model.ProxyDelayPublishCoalescer
 import com.github.yumeyucca.yumebox.domain.model.ProxyDelayTestProgressCallback
@@ -102,6 +103,10 @@ class PreviewRuntimeManager(context: Context) {
         process.stop()
         _state.value = PreviewNodeState()
     }
+
+    /** KimiNoBox: the preview core's proxy providers, or none while it is not running. */
+    suspend fun proxyProviderDetails(): List<ProxyProviderDetail> =
+        runCatching { process.controller().proxyProviderDetails() }.getOrDefault(emptyList())
 
     /** Preview is read-only for selection, but mihomo's delay probes are safe and useful here. */
     suspend fun healthCheck(

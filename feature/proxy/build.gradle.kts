@@ -29,6 +29,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // KimiNoBox: host JVM unit tests live in `test/`, like feature/override.
+    sourceSets {
+        getByName("test") {
+            kotlin.directories.apply {
+                clear()
+                add("test")
+            }
+        }
+    }
 }
 
 dependencies {
@@ -60,4 +70,5 @@ dependencies {
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
+    testImplementation("junit:junit:4.13.2") // KimiNoBox
 }

@@ -37,6 +37,7 @@ import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeCoreOps
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeGroupHub
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeSession
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeSessionDeps
+import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.preview.PreviewRuntimeManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -462,6 +463,20 @@ class ProxyFacade(
         !session.snapshotValue().phase.isActiveOrStopping &&
             !session.isRemoteControllerActive() &&
             preview.hasActiveProfile()
+
+    /**
+     * KimiNoBox: node names of every node source (the providers other than the core's own
+     * `Compatible` ones) of the core the proxy page shows, in the core's order.
+     */
+    suspend fun proxyProviderNodes(): Map<String, List<String>> {
+        val details =
+            runCatching {
+                    if (_nodeSession.value.source == NodeDataSource.Preview) preview.proxyProviderDetails()
+                    else CoreProcess.proxyProviderDetails(appContext)
+                }
+                .getOrDefault(emptyList())
+        return details.filter { it.vehicleType != "Compatible" }.associate { it.name to it.nodeNames }
+    }
 
     private fun publishNodeSession(
         source: NodeDataSource,

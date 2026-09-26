@@ -31,4 +31,5 @@ class ProxyDisplaySettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmk
     val displayMode by enumFlow(ProxyDisplayMode.SINGLE_DETAILED)
     val proxyMode by enumFlow(TunnelState.Mode.Rule)
     val sheetHeightFraction by floatFlow(PROXY_SHEET_HEIGHT_FRACTION_DEFAULT)
+    val groupBySource by boolFlow(true) // KimiNoBox: node list in sections by node source
 }
