@@ -79,6 +79,7 @@ internal fun openProfileConfigPreview(
 internal fun ProfileEditOptionsDialog(
     show: Boolean,
     onOpenConfig: () -> Unit,
+    onViewConfig: () -> Unit, // KimiNoBox: 「查看配置」
     onEditSettings: () -> Unit,
     onDismiss: () -> Unit,
     onDismissFinished: () -> Unit,
@@ -92,6 +93,11 @@ internal fun ProfileEditOptionsDialog(
         Column(verticalArrangement = Arrangement.spacedBy(UiDp.dp12)) {
             Button(modifier = Modifier.fillMaxWidth(), onClick = onOpenConfig) {
                 Text(YumeTxt.ProfilesPage.SettingsDialog.OpenConfig)
+            }
+
+            // KimiNoBox: read-only imported and final config
+            Button(modifier = Modifier.fillMaxWidth(), onClick = onViewConfig) {
+                Text(VIEW_CONFIG)
             }
 
             Button(

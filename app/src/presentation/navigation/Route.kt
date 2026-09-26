@@ -86,6 +86,10 @@ sealed interface Route {
     @Serializable
     data object OverrideConfigPreview : Route
 
+    // KimiNoBox: 「查看配置」 (imported and final config) of one profile
+    @Serializable
+    data class ProfileConfigView(val profileUuid: String, val title: String) : Route
+
     @Serializable
     data object Providers : Route
 

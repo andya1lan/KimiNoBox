@@ -76,6 +76,7 @@ internal fun ProfileEditOptionsDialogHost(
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     var openPreviewOnDismiss by remember(profileToEdit.uuid) { mutableStateOf(false) }
+    var openViewOnDismiss by remember(profileToEdit.uuid) { mutableStateOf(false) } // KimiNoBox
 
     ProfileEditOptionsDialog(
         show = show,
@@ -101,6 +102,12 @@ internal fun ProfileEditOptionsDialogHost(
                 openPreviewOnDismiss = true
             }
         },
+        // KimiNoBox: 「查看配置」 opens once the dialog is gone, like the editor preview
+        onViewConfig = {
+            openPreviewOnDismiss = false
+            openViewOnDismiss = true
+            onDismiss()
+        },
         onEditSettings = {
             openPreviewOnDismiss = false
             onDismiss()
@@ -112,6 +119,16 @@ internal fun ProfileEditOptionsDialogHost(
         },
         onDismissFinished = {
             onDismissFinished()
+            // KimiNoBox
+            if (openViewOnDismiss) {
+                openViewOnDismiss = false
+                navigator.replaceAll(
+                    listOf(
+                        Route.Main(initialPage = BottomBarDestination.Config.ordinal),
+                        Route.ProfileConfigView(profileToEdit.uuid.toString(), profileToEdit.name),
+                    )
+                )
+            }
             if (openPreviewOnDismiss) {
                 openPreviewOnDismiss = false
                 navigator.replaceAll(

@@ -37,6 +37,7 @@ import com.github.yumeyucca.yumebox.screen.connection.ConnectionDetailScreen
 import com.github.yumeyucca.yumebox.screen.connection.ConnectionScreen
 import com.github.yumeyucca.yumebox.screen.log.LogScreen
 import com.github.yumeyucca.yumebox.screen.navigation.*
+import com.github.yumeyucca.yumebox.screen.profiles.ProfileConfigViewScreen // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.rules.RulesScreen
 import com.github.yumeyucca.yumebox.screen.settings.*
 import com.github.yumeyucca.yumebox.screen.traffic.TrafficStatisticsScreen
@@ -60,6 +61,7 @@ fun RouteContent(route: Route, navigator: Navigator) {
         Route.OpenSourceLicenses -> OpenSourceLicensesScreen(navigator)
         Route.Override -> OverrideScreen(navigator)
         Route.OverrideConfigPreview -> OverrideConfigPreviewRoute(navigator)
+        is Route.ProfileConfigView -> ProfileConfigViewScreen(route.profileUuid, route.title) // KimiNoBox
         Route.Providers -> ProvidersScreen(navigator)
         Route.Feature -> FeatureScreen(navigator)
         Route.CustomRouting -> CustomRoutingRoute(navigator)
