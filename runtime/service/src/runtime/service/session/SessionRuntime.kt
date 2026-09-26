@@ -515,6 +515,7 @@ class SessionRuntime(
         }
 
         ensureNotInterrupted(spec)
+        awaitSlowProxyGroups(spec)?.let { return it } // KimiNoBox: a slow start is not a failed one
         val coreTail =
             com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess.coreLogTail(
                 host.context.appContextOrSelf
@@ -531,6 +532,32 @@ class SessionRuntime(
                 (lastControllerError?.let { ": $it" } ?: "") +
                 (coreTail?.let { " ($it)" } ?: "")
         )
+    }
+
+    /**
+     * KimiNoBox: the retries above cover about two seconds, and a fresh core sometimes needs more
+     * before it lists its groups. A local core that is still alive gets up to
+     * [SLOW_GROUPS_GRACE_MS] more and is then accepted without groups (the snapshot refresh fills
+     * them in), so the start is not failed and the new profile version not rolled back. Null
+     * keeps the failure: the core exited, or it is not a local core.
+     */
+    private fun awaitSlowProxyGroups(spec: RuntimeSpec): List<ProxyGroup>? {
+        if (spec.owner != RuntimeOwner.VpnService) return null
+        val deadline = SystemClock.elapsedRealtime() + SLOW_GROUPS_GRACE_MS
+        while (CoreProcess.isLocalCoreAlive()) {
+            ensureNotInterrupted(spec)
+            val groups = runCatching { rest.queryAllProxyGroups(false) }.getOrDefault(emptyList())
+            if (groups.any { it.name.isNotBlank() }) {
+                verifyWarn(spec, "groups exposed late: actualGroups=${groups.size}")
+                return groups
+            }
+            if (SystemClock.elapsedRealtime() >= deadline) {
+                verifyWarn(spec, "no groups ${SLOW_GROUPS_GRACE_MS}ms later; core alive, start accepted")
+                return emptyList()
+            }
+            waitForRetryOrInterrupt(SLOW_GROUPS_POLL_MS)
+        }
+        return null
     }
 
     private fun scheduleRuntimeSnapshotRefresh(spec: RuntimeSpec) {
@@ -728,6 +755,8 @@ class SessionRuntime(
         private const val PROXY_GROUP_READY_RETRY_COUNT = 10
         private const val PROXY_GROUP_READY_RETRY_DELAY_MS = 200L
         private const val CORE_WATCH_INTERVAL_MS = 500L
+        private const val SLOW_GROUPS_GRACE_MS = 10_000L // KimiNoBox
+        private const val SLOW_GROUPS_POLL_MS = 500L // KimiNoBox
 
         /** The session instance currently owning the process-wide Go core. */
         @Volatile private var coreOwner: SessionRuntime? = null
