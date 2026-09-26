@@ -30,6 +30,7 @@ import com.github.yumeyucca.yumebox.runtime.api.CoreApi
 import com.github.yumeyucca.yumebox.runtime.api.CoreAsyncQueries
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
+import okhttp3.ConnectionPool // KimiNoBox
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -75,7 +76,15 @@ class CoreController(
                 requestTimeoutMillis = REQUEST_TIMEOUT_MS
             }
             local?.let { target ->
-                engine { config { socketFactory(UnixSocketFactory(target.socketPath)) } }
+                engine {
+                    config {
+                        socketFactory(UnixSocketFactory(target.socketPath))
+                        // KimiNoBox: OkHttp matches pooled connections by host and port only, and
+                        // Ktor shares one pool across clients, so the VPN and preview cores (both
+                        // http://localhost) could answer each other's requests without this.
+                        connectionPool(ConnectionPool())
+                    }
+                }
             }
         }
     }
