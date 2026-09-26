@@ -59,6 +59,8 @@ fun ProfileCard(
     onToggleEnabled: (Profile) -> Unit,
     onOverrideSettings: ((Profile) -> Unit)? = null,
     @SuppressLint("ModifierParameter") modifier: Modifier = Modifier,
+    note: String? = null, // KimiNoBox: config version status
+    noteIsError: Boolean = false, // KimiNoBox
 ) {
     val spacing = AppTheme.spacing
     val opacity = AppTheme.opacity
@@ -178,6 +180,18 @@ fun ProfileCard(
                         )
                     }
                 }
+            }
+            // KimiNoBox
+            note?.let {
+                Text(
+                    text = it,
+                    fontSize = 13.sp,
+                    color = if (noteIsError) colorScheme.error else colorScheme.onSurfaceVariantSummary,
+                    lineHeight = 18.sp,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = spacing.space4),
+                )
             }
         }
 

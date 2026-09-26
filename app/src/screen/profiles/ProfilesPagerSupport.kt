@@ -25,6 +25,7 @@ package com.github.yumeyucca.yumebox.screen.profiles
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope // KimiNoBox
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -83,6 +84,7 @@ internal fun ProfileEditOptionsDialog(
     onEditSettings: () -> Unit,
     onDismiss: () -> Unit,
     onDismissFinished: () -> Unit,
+    extraActions: @Composable ColumnScope.() -> Unit = {}, // KimiNoBox: version actions
 ) {
     AppDialog(
         show = show,
@@ -99,6 +101,7 @@ internal fun ProfileEditOptionsDialog(
             Button(modifier = Modifier.fillMaxWidth(), onClick = onViewConfig) {
                 Text(VIEW_CONFIG)
             }
+            extraActions() // KimiNoBox
 
             Button(
                 modifier = Modifier.fillMaxWidth(),

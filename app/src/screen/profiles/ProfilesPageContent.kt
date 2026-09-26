@@ -187,6 +187,7 @@ private fun ProfilesList(
             onReorderProfiles(fromProfile, toProfile)
         }
     val importedDir = App.instance.filesDir.resolve("imported")
+    val versionNotes = rememberVersionNotes(profiles) // KimiNoBox
 
     ScreenLazyColumn(
         lazyListState = listState,
@@ -212,6 +213,8 @@ private fun ProfilesList(
                     onDelete = { onDeleteProfile(it) },
                     onEdit = { onEditProfile(it) },
                     onToggleEnabled = { onToggleProfile(it) },
+                    note = versionNotes[profile.uuid]?.text, // KimiNoBox
+                    noteIsError = versionNotes[profile.uuid]?.isError == true, // KimiNoBox
                 )
             }
         }

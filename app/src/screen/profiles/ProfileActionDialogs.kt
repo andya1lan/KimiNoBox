@@ -117,6 +117,13 @@ internal fun ProfileEditOptionsDialogHost(
             openPreviewOnDismiss = false
             onDismiss()
         },
+        // KimiNoBox
+        extraActions = {
+            ProfileVersionActions(profileToEdit) {
+                openPreviewOnDismiss = false
+                onDismiss()
+            }
+        },
         onDismissFinished = {
             onDismissFinished()
             // KimiNoBox
