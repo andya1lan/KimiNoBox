@@ -554,10 +554,22 @@ class CoreController(
         val category = if (type == Provider.Type.Proxy) "proxies" else "rules"
         // KimiNoBox: the core puts the reason of a failed update (download error, HTTP status)
         // into the body; the HTTP exception message would bury it behind the request line.
+        // The core answers only once the download is over, so the update gets its own timeout.
         try {
-            request(HttpMethod.Put, "providers", category, name)
+            ensureEndpointReady()
+            client.put(buildUrl("providers", category, name)) {
+                applyAuth()
+                timeout {
+                    requestTimeoutMillis = PROVIDER_UPDATE_TIMEOUT_MS
+                    socketTimeoutMillis = PROVIDER_UPDATE_TIMEOUT_MS
+                }
+            }
         } catch (error: ResponseException) {
             throw IllegalStateException(coreMessage(error.response) ?: error.message, error)
+        } catch (error: HttpRequestTimeoutException) {
+            throw IllegalStateException(PROVIDER_UPDATE_TIMEOUT_MESSAGE, error)
+        } catch (error: io.ktor.client.network.sockets.SocketTimeoutException) {
+            throw IllegalStateException(PROVIDER_UPDATE_TIMEOUT_MESSAGE, error)
         }
     }
 
@@ -668,6 +680,8 @@ class CoreController(
     private companion object {
         const val CONNECT_TIMEOUT_MS = 5_000L
         const val REQUEST_TIMEOUT_MS = 10_000L
+        const val PROVIDER_UPDATE_TIMEOUT_MS = 60_000L // KimiNoBox
+        const val PROVIDER_UPDATE_TIMEOUT_MESSAGE = "内核 60 秒内没有下载完成" // KimiNoBox
         const val LOCAL_GROUP_QUERY_TIMEOUT_MS = 1_000L
         const val TRAFFIC_SAMPLE_CACHE_NS = 500_000_000L
 

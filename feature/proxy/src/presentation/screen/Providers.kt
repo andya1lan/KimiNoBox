@@ -23,7 +23,6 @@
 package com.github.yumeyucca.yumebox.presentation.screen
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -35,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.github.yumeyucca.yumebox.common.util.showToastDialog // KimiNoBox
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.model.Provider
 import com.github.yumeyucca.yumebox.presentation.component.*
@@ -98,7 +98,7 @@ fun ProvidersContent(navigator: Navigator) {
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            context.toast(it, Toast.LENGTH_LONG)
+            showToastDialog(it) // KimiNoBox: the whole reason, with Copy, instead of a cut-off toast
             viewModel.clearError()
         }
     }
