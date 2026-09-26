@@ -60,6 +60,7 @@ internal fun OverrideApplyToProfilesSheet(
     target: OverrideConfig?,
     viewModel: OverrideConfigViewModel,
     onDismiss: () -> Unit,
+    preselectActive: Boolean = false, // KimiNoBox: a saved node source starts on the active profile
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -75,7 +76,13 @@ internal fun OverrideApplyToProfilesSheet(
         viewModel
             .loadApplySnapshot(config.id)
             .onSuccess { snapshot ->
-                ui = ApplyUi.Ready(snapshot.profiles, snapshot.selectedProfileIds)
+                // KimiNoBox: nothing bound yet, so the active profile starts checked
+                val selected =
+                    snapshot.selectedProfileIds.ifEmpty {
+                        if (!preselectActive) emptySet()
+                        else snapshot.profiles.filter { it.active }.map { it.uuid.toString() }.toSet()
+                    }
+                ui = ApplyUi.Ready(snapshot.profiles, selected)
             }
             .onFailure { error ->
                 context.toast(

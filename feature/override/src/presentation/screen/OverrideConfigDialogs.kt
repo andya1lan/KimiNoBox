@@ -36,6 +36,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
 import com.github.yumeyucca.yumebox.data.model.OverrideContentType
+import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind // KimiNoBox
+import com.github.yumeyucca.yumebox.nodesource.NodeText // KimiNoBox
 import com.github.yumeyucca.yumebox.presentation.component.AppActionBottomSheet
 import com.github.yumeyucca.yumebox.presentation.component.AppBottomSheetCloseAction
 import com.github.yumeyucca.yumebox.presentation.component.AppBottomSheetConfirmAction
@@ -54,6 +56,8 @@ internal enum class OverrideConfigInputMode {
     CreateNew,
     LocalFile,
     NetworkUrl,
+    NodeSource, // KimiNoBox: the 「节点源」 form
+    SelfNodes, // KimiNoBox: the 「自建节点」 form
 }
 
 @Composable
@@ -64,6 +68,7 @@ internal fun CreateConfigDialog(
     onConfirmImport: suspend (String, String) -> Result<OverrideConfig>,
     onConfirmNetworkImport: suspend (String) -> Result<OverrideConfig>,
     onDismiss: () -> Unit,
+    onConfirmTemplate: (NodeTemplateKind) -> Unit = {}, // KimiNoBox: opens a node source form
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -85,6 +90,7 @@ internal fun CreateConfigDialog(
                 selectedImportUri != null && selectedImportFileName.isNotBlank()
 
             OverrideConfigInputMode.NetworkUrl -> networkImportUrl.isNotBlank() && !isImporting
+            OverrideConfigInputMode.NodeSource, OverrideConfigInputMode.SelfNodes -> true // KimiNoBox
         }
     )
     val importConfigLauncher =
@@ -182,6 +188,13 @@ internal fun CreateConfigDialog(
                                 isImporting = false
                             }
                         }
+
+                        // KimiNoBox
+                        OverrideConfigInputMode.NodeSource ->
+                            onConfirmTemplate(NodeTemplateKind.NodeSource)
+
+                        OverrideConfigInputMode.SelfNodes ->
+                            onConfirmTemplate(NodeTemplateKind.SelfNodes)
                     }
                 },
             )
@@ -235,6 +248,9 @@ internal fun CreateConfigDialog(
                         onUrlChange = { networkImportUrl = it },
                     )
                 }
+
+                OverrideConfigInputMode.NodeSource -> NodeHint(NodeText.NODE_SOURCE_HINT) // KimiNoBox
+                OverrideConfigInputMode.SelfNodes -> NodeHint(NodeText.SELF_NODES_HINT) // KimiNoBox
             }
         }
     }
@@ -370,4 +386,6 @@ private val OverrideConfigInputMode.label: String
             OverrideConfigInputMode.CreateNew -> YumeTxt.Override.Action.New
             OverrideConfigInputMode.LocalFile -> YumeTxt.ProfilesPage.Type.LocalFile
             OverrideConfigInputMode.NetworkUrl -> YumeTxt.Override.Action.NetworkImport
+            OverrideConfigInputMode.NodeSource -> NodeText.NODE_SOURCE // KimiNoBox
+            OverrideConfigInputMode.SelfNodes -> NodeText.SELF_NODES // KimiNoBox
         }

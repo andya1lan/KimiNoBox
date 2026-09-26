@@ -30,6 +30,17 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // KimiNoBox: host JVM unit tests of the node source templates live in `test/`, mirroring the
+    // flat `src/` layout the root build applies to `main`.
+    sourceSets {
+        getByName("test") {
+            kotlin.directories.apply {
+                clear()
+                add("test")
+            }
+        }
+    }
 }
 
 dependencies {
@@ -59,4 +70,9 @@ dependencies {
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
     implementation(libs.reorderable)
+
+    // KimiNoBox: node source templates. SnakeYAML Engine 3.x reads emoji names, which the
+    // SnakeYAML 1.18 behind upstream's YamlCodec rejects.
+    implementation("org.snakeyaml:snakeyaml-engine:3.1.1")
+    testImplementation("junit:junit:4.13.2") // KimiNoBox
 }

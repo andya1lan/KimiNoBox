@@ -33,6 +33,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
+import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind // KimiNoBox
+import com.github.yumeyucca.yumebox.nodesource.NodeText // KimiNoBox
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.BadgePlus
@@ -74,6 +76,8 @@ private class OverrideListDialogState {
     val deleteTargetConfig = mutableStateOf<OverrideConfig?>(null)
     val exportTargetConfig = mutableStateOf<OverrideConfig?>(null)
     val applyTargetConfig = mutableStateOf<OverrideConfig?>(null)
+    val nodeEditor = mutableStateOf<NodeEditorTarget?>(null) // KimiNoBox
+    val applyPreselectActive = mutableStateOf(false) // KimiNoBox
 }
 
 @Composable
@@ -103,6 +107,8 @@ fun OverrideListScreen(
     val deleteTargetConfig = dialogs.deleteTargetConfig
     val exportTargetConfig = dialogs.exportTargetConfig
     val applyTargetConfig = dialogs.applyTargetConfig
+    var nodeEditor by dialogs.nodeEditor // KimiNoBox
+    var applyPreselectActive by dialogs.applyPreselectActive // KimiNoBox
 
     val listState = rememberLazyListState()
     val createFabController = rememberOverrideFabController()
@@ -126,12 +132,16 @@ fun OverrideListScreen(
                 )
             }
         }
+    // KimiNoBox: node sources get their own section below the imported overrides.
+    val nodeSourceItems =
+        remember(userItems) { userItems.filter { NodeTemplateKind.of(it.config.content) != null } }
+    val importedItems = remember(userItems, nodeSourceItems) { userItems - nodeSourceItems.toSet() }
     // Reorder only applies to the user section; list indices must skip built-in rows + titles.
     // Layout: [builtin title?] + N built-in cards + [user title?] + M user cards
     val userListIndexOffset =
-        remember(builtInItems, userItems) {
+        remember(builtInItems, importedItems) {
             val builtinBlock = if (builtInItems.isEmpty()) 0 else 1 + builtInItems.size
-            val userTitle = if (userItems.isEmpty()) 0 else 1
+            val userTitle = if (importedItems.isEmpty()) 0 else 1 // KimiNoBox: importedItems
             builtinBlock + userTitle
         }
     val reorderState =
@@ -139,7 +149,10 @@ fun OverrideListScreen(
             val fromUser = from.index - userListIndexOffset
             val toUser = to.index - userListIndexOffset
             if (fromUser < 0 || toUser < 0) return@rememberReorderableLazyListState
-            viewModel.reorderUserConfigs(fromUser, toUser)
+            // KimiNoBox: the section skips node sources; move within all user configs
+            val fromItem = importedItems.getOrNull(fromUser) ?: return@rememberReorderableLazyListState
+            val toItem = importedItems.getOrNull(toUser) ?: return@rememberReorderableLazyListState
+            viewModel.reorderUserConfigs(userItems.indexOf(fromItem), userItems.indexOf(toItem))
         }
 
     val exportConfigLauncher =
@@ -183,16 +196,47 @@ fun OverrideListScreen(
     LaunchedEffect(pendingRevealConfigId, builtInItems, userItems, userListIndexOffset) {
         val targetId = pendingRevealConfigId ?: return@LaunchedEffect
         val builtInIndex = builtInItems.indexOfFirst { it.config.id == targetId }
-        val userIndex = userItems.indexOfFirst { it.config.id == targetId }
+        val userIndex = importedItems.indexOfFirst { it.config.id == targetId } // KimiNoBox
+        val nodeSourceIndex = nodeSourceItems.indexOfFirst { it.config.id == targetId } // KimiNoBox
         val targetIndex =
             when {
                 builtInIndex >= 0 -> (if (builtInItems.isEmpty()) 0 else 1) + builtInIndex
 
                 userIndex >= 0 -> userListIndexOffset + userIndex
+                // KimiNoBox: below the imported cards and the node source title
+                nodeSourceIndex >= 0 ->
+                    userListIndexOffset + importedItems.size + 1 + nodeSourceIndex
                 else -> return@LaunchedEffect
             }
         listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
         viewModel.consumePendingRevealConfig(targetId)
+    }
+
+    // KimiNoBox: node source forms are drawn in place of the list, so the list state survives them.
+    // After a save the apply sheet opens, the active profile checked while nothing is bound.
+    nodeEditor?.let { target ->
+        NodeEditorHost(
+            target = target,
+            viewModel = viewModel,
+            onSaved = { config ->
+                nodeEditor = null
+                applyPreselectActive = true
+                applyTargetConfig.value = config
+            },
+            onClose = { nodeEditor = null },
+        )
+        return
+    }
+    // KimiNoBox: a node source opens its form, or the YAML editor once it was edited by hand.
+    val openNodeSource: (OverrideConfig) -> Unit = { config ->
+        val content = viewModel.getConfigContent(config.id) ?: config.content
+        val target = NodeEditorTarget.of(config.copy(content = content))
+        if (target != null) {
+            nodeEditor = target
+        } else {
+            context.toast(NodeText.OPENED_AS_YAML)
+            onOpenCodeEditor(config)
+        }
     }
 
     Scaffold(
@@ -249,12 +293,12 @@ fun OverrideListScreen(
             }
 
             // "导入覆写" section only appears when the user actually has imports — no empty title/hint.
-            if (userItems.isNotEmpty()) {
+            if (importedItems.isNotEmpty()) { // KimiNoBox: importedItems
                 item(key = "section-user", contentType = "section-title") {
                     Title(YumeTxt.Override.Section.User)
                 }
                 items(
-                    items = userItems,
+                    items = importedItems, // KimiNoBox
                     key = { it.config.id },
                     contentType = { "override-config-card" },
                 ) { item ->
@@ -282,6 +326,39 @@ fun OverrideListScreen(
                     }
                 }
             }
+
+            // KimiNoBox: node sources, edited through their form
+            if (nodeSourceItems.isNotEmpty()) {
+                item(key = "section-node-source", contentType = "section-title") {
+                    Title(NodeText.SECTION)
+                }
+                items(
+                    items = nodeSourceItems,
+                    key = { it.config.id },
+                    contentType = { "override-node-source-card" },
+                ) { item ->
+                    val config = item.config
+                    OverrideConfigCard(
+                        config = config,
+                        isDragging = false,
+                        isInUse = item.isInUse,
+                        isBuiltIn = false,
+                        onApply = { applyTargetConfig.value = config },
+                        onExport = {
+                            exportTargetConfig.value = config
+                            exportConfigLauncher.launch(
+                                "${config.name}.${config.contentType.extension}"
+                            )
+                        },
+                        onEdit = { openNodeSource(config) },
+                        onDelete = {
+                            deleteTargetConfig.value = config
+                            showDeleteDialog.value = true
+                        },
+                        enableDrag = false,
+                    )
+                }
+            }
         }
 
         CreateConfigDialog(
@@ -294,6 +371,11 @@ fun OverrideListScreen(
             onConfirmImport = viewModel::importConfig,
             onConfirmNetworkImport = viewModel::importConfigFromUrl,
             onDismiss = { showCreateDialog.value = false },
+            // KimiNoBox
+            onConfirmTemplate = { kind ->
+                showCreateDialog.value = false
+                nodeEditor = NodeEditorTarget.New(kind)
+            },
         )
 
         DeleteConfirmDialog(
@@ -314,7 +396,11 @@ fun OverrideListScreen(
         OverrideApplyToProfilesSheet(
             target = applyTargetConfig.value,
             viewModel = viewModel,
-            onDismiss = { applyTargetConfig.value = null },
+            onDismiss = {
+                applyTargetConfig.value = null
+                applyPreselectActive = false // KimiNoBox
+            },
+            preselectActive = applyPreselectActive, // KimiNoBox
         )
     }
 }
