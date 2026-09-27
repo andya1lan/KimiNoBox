@@ -39,8 +39,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * KimiNoBox: the node source line of a profile card (C3 ①), in the card's own miuix style. One
- * source reads like a remote subscription: update time, traffic, expiry; several are counted.
+ * KimiNoBox: the node source line of a profile card (C3 ①), in the card's own miuix style. It only
+ * counts the sources; their details are in the sheet it opens (docs/plan-a-round3.md D4).
  */
 @Composable
 fun NodeSourceSummary(profileId: String, onClick: () -> Unit) {
@@ -48,28 +48,13 @@ fun NodeSourceSummary(profileId: String, onClick: () -> Unit) {
     val sources by manager.sources.collectAsState()
     val bound = sources.filter { profileId in it.boundProfileIds }
     val colors = MiuixTheme.colorScheme
-    val text =
-        when (bound.size) {
-            0 -> "节点源：无 · 点此添加"
-            1 -> {
-                val source = bound.single()
-                val info = source.state.info
-                listOfNotNull(
-                        "节点源「${source.form.name}」",
-                        info?.updatedAt?.let(NodeSourceFormat::relativeTime),
-                        info?.let(NodeSourceFormat::traffic),
-                        info?.let(NodeSourceFormat::expiry),
-                    )
-                    .joinToString(" · ")
-            }
-            else -> "节点源 ${bound.size} 个 · 点此管理"
-        }
+    val text = if (bound.isEmpty()) "节点源：无 · 点此添加" else "节点源 ${bound.size} 个 · 点此管理"
     Text(
         text = text,
         fontSize = 13.sp,
         lineHeight = 18.sp,
         color = if (bound.any { it.state.lastError != null }) colors.error else colors.primary,
-        maxLines = 2,
+        maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.fillMaxWidth().padding(top = AppTheme.spacing.space4).clickable(onClick = onClick),
     )
