@@ -35,8 +35,11 @@ class CodeEditorState(
     val language: LanguageScope = LanguageScope.Yaml,
     val readOnly: Boolean = false,
     val showLineNumbers: Boolean = true,
-    val wordWrap: Boolean = false,
+    wordWrap: Boolean = false,
 ) {
+    // KimiNoBox: soft wrap, applied by CodeEditor, which keeps it on the app-wide setting
+    var wordWrap: Boolean by mutableStateOf(wordWrap)
+
     var editor: CodeEditor? by mutableStateOf(null)
         internal set
 

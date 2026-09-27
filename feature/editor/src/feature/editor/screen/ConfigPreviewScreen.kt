@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.alpha // KimiNoBox
 import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton // KimiNoBox
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.format.CodeFormatter
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
@@ -91,6 +92,7 @@ fun ConfigPreviewScreen(
                     }
                 },
                 actions = {
+                    WordWrapButton(Modifier.padding(end = UiDp.dp12)) // KimiNoBox
                     // KimiNoBox: miuix does not dim a disabled IconButton, so the icon fades itself
                     val canUndo = editorState.canUndo()
                     val canRedo = editorState.canRedo()

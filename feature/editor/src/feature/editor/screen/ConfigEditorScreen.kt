@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton // KimiNoBox
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.feature.editor.viewmodel.ConfigEditorViewModel
@@ -91,6 +92,7 @@ fun ConfigEditorScreen(
                         ConfigType.Profile -> YumeTxt.Editor.Title.Profile
                     },
                 scrollBehavior = scrollBehavior,
+                actions = { WordWrapButton() }, // KimiNoBox
             )
         }
     ) { paddingValues ->

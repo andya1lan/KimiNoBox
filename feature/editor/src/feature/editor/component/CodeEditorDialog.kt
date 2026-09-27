@@ -24,8 +24,10 @@ package com.github.yumeyucca.yumebox.feature.editor.component
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment // KimiNoBox
 import androidx.compose.ui.Modifier
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton // KimiNoBox
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.presentation.component.AppDialog
@@ -56,14 +58,17 @@ fun CodeEditorDialog(
     if (show) {
         AppDialog(show = show, title = title, onDismissRequest = onDismiss) {
             Column(modifier = Modifier.padding(UiDp.dp20)) {
-                subtitle?.let { text ->
+                // KimiNoBox: the 「自动换行」 button, on the subtitle's line
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = text,
+                        text = subtitle.orEmpty(),
+                        modifier = Modifier.weight(1f),
                         style = MiuixTheme.textStyles.body2,
                         color = MiuixTheme.colorScheme.outline,
                     )
-                    Spacer(modifier = Modifier.height(UiDp.dp12))
+                    WordWrapButton()
                 }
+                Spacer(modifier = Modifier.height(UiDp.dp12))
 
                 CodeEditor(
                     state = editorState,

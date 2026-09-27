@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton // KimiNoBox
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.presentation.component.AppDialog
@@ -83,6 +84,7 @@ fun FullscreenEditorScreen(
                 title = title,
                 scrollBehavior = scrollBehavior,
                 actions = {
+                    WordWrapButton(Modifier.padding(end = UiDp.dp12)) // KimiNoBox
                     IconButton(
                         modifier = Modifier.padding(end = UiDp.dp12),
                         onClick = {

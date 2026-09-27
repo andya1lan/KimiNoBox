@@ -51,6 +51,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":locale"))
     implementation(project(":ui"))
+    implementation(project(":data")) // KimiNoBox: the editors' soft wrap setting
 
     // Sora Editor
     implementation(platform(libs.editor.bom))

@@ -53,6 +53,7 @@ internal fun NodeEditorScaffold(
     onSave: () -> Unit,
     onClose: () -> Unit,
     scrollable: Boolean = true,
+    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler(onBack = onClose)
@@ -64,6 +65,7 @@ internal fun NodeEditorScaffold(
                 title = title,
                 scrollBehavior = scrollBehavior,
                 actions = {
+                    actions()
                     IconButton(
                         modifier = Modifier.padding(end = UiDp.dp12),
                         onClick = onSave,

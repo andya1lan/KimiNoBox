@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.presentation.component.SmallTopBar
@@ -65,7 +66,7 @@ fun ProfileConfigViewScreen(profileUuid: String, title: String) {
             ConfigView.Final -> views?.final
         }
 
-    Scaffold(topBar = { SmallTopBar(title = title, scrollBehavior = scrollBehavior) }) { paddingValues ->
+    Scaffold(topBar = { SmallTopBar(title = title, scrollBehavior = scrollBehavior, actions = { WordWrapButton() }) }) { paddingValues ->
         Column(
             modifier =
                 Modifier

@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditorState
+import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton
 import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
 import com.github.yumeyucca.yumebox.nodesource.NodeListYaml
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceProblems
@@ -36,6 +37,7 @@ import com.github.yumeyucca.yumebox.nodesource.NodeText
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesForm
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesTemplate
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
+import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import kotlinx.coroutines.launch
 
 /**
@@ -85,6 +87,7 @@ internal fun SelfNodesEditorScreen(
         },
         onClose = onClose,
         scrollable = false,
+        actions = { WordWrapButton(Modifier.padding(end = UiDp.dp12)) },
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.space12)) {
             NodeFormField(

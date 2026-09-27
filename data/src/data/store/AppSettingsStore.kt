@@ -55,6 +55,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val predictiveBackEnabled by boolFlow(false)
     val predictiveBackMaxProgress by floatFlow(50.0f)
     val customUserAgent by strFlow("")
+    val editorWordWrap by boolFlow(false) // KimiNoBox: soft wrap in every code editor
 
     init {
         migrateLegacyHomeKeys()

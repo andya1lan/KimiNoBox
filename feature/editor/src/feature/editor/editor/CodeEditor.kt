@@ -94,13 +94,23 @@ fun CodeEditor(
         }
     }
 
+    // KimiNoBox: every editor follows the one soft wrap setting (docs/plan-a-round4.md E4). Read here,
+    // so a change recomposes this and hands AndroidView a new update block, which applies it.
+    val wordWrap = editorWordWrap().state.collectAsState().value
+
     AndroidView(
         factory = { ctx ->
+            state.wordWrap = wordWrap // KimiNoBox: before the view is made, so it opens wrapped or not
             createCodeEditor(ctx, state, editorThemeState.isDark, onTextChange).also { editor ->
                 state.editor = editor
                 state.refreshHistoryState()
                 editorRef.value = editor
             }
+        },
+        // KimiNoBox
+        update = { editor ->
+            state.wordWrap = wordWrap
+            editor.applyWordWrap(wordWrap)
         },
         modifier = modifier,
         onRelease = { editor ->
@@ -123,6 +133,7 @@ private fun createCodeEditor(
 
     return CodeEditor(context).apply {
         isEditable = !state.readOnly
+        isWordwrap = state.wordWrap // KimiNoBox
 
         // Sora's default text size is quite large; pin a comfortable editor default (sp). Users can
         // still pinch-to-zoom from here.
