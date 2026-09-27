@@ -22,7 +22,8 @@ package com.github.yumeyucca.yumebox.nodesource
 
 /**
  * KimiNoBox: a section of rows to check and sort, such as the 覆写 section of the node source
- * sheet (docs/plan-a-round3.md D5). The checked ids keep the order the user sorted them in.
+ * sheet (docs/plan-a-round3.md D5) and the node sources of 「从节点源新建配置」. The checked ids
+ * keep the order the user sorted them in.
  */
 object CheckedOrder {
     /** [ids] with [from] moved to the place [to] has, as a drag does; [ids] when either is missing. */
@@ -32,4 +33,8 @@ object CheckedOrder {
         if (fromIndex < 0 || toIndex < 0) return ids
         return ids.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
     }
+
+    /** [checked] with the ids of [current] that [known] lacked, such as a source made meanwhile, checked last. */
+    fun withAdded(checked: List<String>, known: List<String>, current: List<String>): List<String> =
+        checked + current.filter { it !in known && it !in checked }
 }

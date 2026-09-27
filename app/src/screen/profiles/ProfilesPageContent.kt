@@ -38,12 +38,12 @@ import androidx.compose.ui.draw.alpha
 import com.github.yumeyucca.yumebox.App
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.ShellIcons
+import com.github.yumeyucca.yumebox.presentation.navigation.Route // KimiNoBox
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.screen.home.HomeViewModel
 import com.github.yumeyucca.yumebox.screen.nodesource.NewFromSourcesEntry // KimiNoBox
-import com.github.yumeyucca.yumebox.screen.nodesource.NewProfileFromSourcesDialog // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSheet // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.nodesource.NodeSourceSummary // KimiNoBox
 import kotlinx.coroutines.launch
@@ -132,7 +132,7 @@ internal fun ProfilesPageContent(
     sheetHost: @Composable () -> Unit = {},
 ) {
     val scrollBehavior = MiuixScrollBehavior()
-    var showFromSources by remember { mutableStateOf(false) } // KimiNoBox
+    val navigator = LocalNavigator.current // KimiNoBox
 
     Scaffold(
         topBar = {
@@ -144,7 +144,7 @@ internal fun ProfilesPageContent(
     ) { innerPadding ->
         Box(Modifier.fillMaxSize()) {
             if (profiles.isEmpty()) {
-                ProfileEmptyAddGuide(onClick = onAddProfile, onNewFromSources = { showFromSources = true }) // KimiNoBox
+                ProfileEmptyAddGuide(onClick = onAddProfile, onNewFromSources = { navigator.push(Route.NewProfileFromSources) }) // KimiNoBox
             } else {
                 ProfilesList(
                     profiles = profiles,
@@ -153,7 +153,7 @@ internal fun ProfilesPageContent(
                     scrollBehavior = scrollBehavior,
                     isDownloading = isDownloading,
                     onAddProfile = onAddProfile,
-                    onNewFromSources = { showFromSources = true }, // KimiNoBox
+                    onNewFromSources = { navigator.push(Route.NewProfileFromSources) }, // KimiNoBox
                     onReorderProfiles = onReorderProfiles,
                     onShareProfile = onShareProfile,
                     onUpdateProfile = onUpdateProfile,
@@ -165,15 +165,6 @@ internal fun ProfilesPageContent(
             // Sheet composition is hosted here; dual-pane renders overlays in the left-pane root
             // Scaffold.
             sheetHost()
-            // KimiNoBox
-            if (showFromSources) {
-                val profilesViewModel = org.koin.androidx.compose.koinViewModel<ProfilesViewModel>()
-                NewProfileFromSourcesDialog(
-                    navigator = LocalNavigator.current,
-                    onDismiss = { showFromSources = false },
-                    onCreated = profilesViewModel::refreshProfiles,
-                )
-            }
         }
     }
 }

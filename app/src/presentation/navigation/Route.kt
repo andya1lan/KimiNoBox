@@ -94,6 +94,10 @@ sealed interface Route {
     @Serializable
     data class NodeSourceEdit(val overrideId: String? = null, val bindProfileId: String? = null) : Route
 
+    // KimiNoBox: 「从节点源新建配置」
+    @Serializable
+    data object NewProfileFromSources : Route
+
     @Serializable
     data object Providers : Route
 

@@ -30,4 +30,13 @@ class CheckedOrderTest {
         assertEquals(listOf("b", "c", "a"), CheckedOrder.moved(listOf("a", "b", "c"), "a", "c"))
         assertEquals(listOf("a", "b"), CheckedOrder.moved(listOf("a", "b"), "x", "a"))
     }
+
+    @Test
+    fun aSourceMadeMeanwhileIsCheckedLast() {
+        val known = listOf("a", "b")
+        assertEquals(listOf("b", "c"), CheckedOrder.withAdded(listOf("b"), known, listOf("a", "b", "c")))
+        // Backed out of the editor: nothing new
+        assertEquals(listOf("b"), CheckedOrder.withAdded(listOf("b"), known, known))
+        assertEquals(listOf("c"), CheckedOrder.withAdded(listOf("c"), known, listOf("a", "b", "c")))
+    }
 }
