@@ -34,11 +34,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
+import com.github.yumeyucca.yumebox.nodesource.CheckedOrder
 import com.github.yumeyucca.yumebox.nodesource.NodeNameClash
 import com.github.yumeyucca.yumebox.nodesource.NodeSource
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceManager
@@ -112,9 +112,9 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
             // A row only moves among its own kind: sources among sources, overrides among overrides.
             when {
                 fromKey.startsWith(SOURCE_KEY) && toKey.startsWith(SOURCE_KEY) ->
-                    sourceOrder = sourceOrder.moved(fromKey.removePrefix(SOURCE_KEY), toKey.removePrefix(SOURCE_KEY))
+                    sourceOrder = CheckedOrder.moved(sourceOrder, fromKey.removePrefix(SOURCE_KEY), toKey.removePrefix(SOURCE_KEY))
                 fromKey.startsWith(OVERRIDE_KEY) && toKey.startsWith(OVERRIDE_KEY) ->
-                    overrideOrder = overrideOrder.moved(fromKey.removePrefix(OVERRIDE_KEY), toKey.removePrefix(OVERRIDE_KEY))
+                    overrideOrder = CheckedOrder.moved(overrideOrder, fromKey.removePrefix(OVERRIDE_KEY), toKey.removePrefix(OVERRIDE_KEY))
             }
         }
     val update: (List<NodeSource>) -> Unit = { targets ->
@@ -223,8 +223,9 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                 // Checked ones on top in chain order, each with a handle; unchecked below, no handle.
                 items(overrideOrder.mapNotNull { id -> checkedOverrides.firstOrNull { it.id == id } }, key = { OVERRIDE_KEY + it.id }) { config ->
                     ReorderableItem(reorderState, key = OVERRIDE_KEY + config.id) {
-                        OverrideRow(
-                            config = config,
+                        CheckRow(
+                            title = config.name,
+                            detail = overrideKind(config),
                             checked = true,
                             onCheckedChange = { scope.launch { manager.setOverrideBound(profileId, config.id, it) } },
                             handle = {
@@ -238,8 +239,9 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                     }
                 }
                 items(uncheckedOverrides, key = { OVERRIDE_KEY + it.id }) { config ->
-                    OverrideRow(
-                        config = config,
+                    CheckRow(
+                        title = config.name,
+                        detail = overrideKind(config),
                         checked = false,
                         onCheckedChange = { scope.launch { manager.setOverrideBound(profileId, config.id, it) } },
                         modifier = Modifier.animateItem(),
@@ -299,42 +301,6 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
             )
         }
     }
-}
-
-@Composable
-private fun OverrideRow(
-    config: OverrideConfig,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    handle: (@Composable () -> Unit)? = null,
-) {
-    ListItem(
-        headlineContent = { Text(config.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = { Text(overrideKind(config)) },
-        leadingContent = { Checkbox(checked = checked, onCheckedChange = onCheckedChange) },
-        trailingContent = handle,
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = modifier.clickable { onCheckedChange(!checked) },
-    )
-}
-
-/** The handle a row is dragged by; only a drag from here moves the row. */
-@Composable
-private fun DragHandle(modifier: Modifier) {
-    Icon(
-        DragHandleIcon,
-        contentDescription = "拖动排序",
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(8.dp).size(24.dp),
-    )
-}
-
-private fun List<String>.moved(from: String, to: String): List<String> {
-    val fromIndex = indexOf(from)
-    val toIndex = indexOf(to)
-    if (fromIndex < 0 || toIndex < 0) return this
-    return toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
 }
 
 @Composable
