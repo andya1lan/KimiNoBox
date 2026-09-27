@@ -34,12 +34,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.nodesource.CheckedOrder
+import com.github.yumeyucca.yumebox.nodesource.NewProfileDefaults
+import com.github.yumeyucca.yumebox.nodesource.NewProfileDefaultsStore
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceManager
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceProfileFactory
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
@@ -54,21 +57,21 @@ import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-private const val ACL4SSR_ID = "builtin-acl4ssr-online-full"
-
 /**
  * KimiNoBox: 「从节点源新建配置」 (C5): pick node sources and overrides; the App makes a local
  * profile that binds the checked sources, then the checked overrides, each in the order shown
- * (docs/plan-a-round4.md E2). Both sections check and sort like the sheet's 覆写 section. A page
- * of its own (E1): 「新建节点源」 opens the editor on top of it, and coming back keeps what was
- * filled in and checks the new source. Everything picked is saveable state, since the page
- * leaves composition while the editor is open.
+ * (docs/plan-a-round4.md E2). Both sections check and sort like the sheet's 覆写 section; the
+ * overrides start from the saved default list, 默认配置 (base fields and ACL4SSR) at first. A page of its
+ * own (E1): 「新建节点源」 opens the editor on top of it, and coming back keeps what was filled in
+ * and checks the new source. Everything picked is saveable state, since the page leaves
+ * composition while the editor is open.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewProfileFromSourcesScreen(navigator: Navigator) {
     val manager: NodeSourceManager = koinInject()
     val factory: NodeSourceProfileFactory = koinInject()
+    val defaults: NewProfileDefaultsStore = koinInject()
     val profilesViewModel = koinViewModel<ProfilesViewModel>()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -77,15 +80,16 @@ fun NewProfileFromSourcesScreen(navigator: Navigator) {
     var selfChoices by rememberSaveable { mutableStateOf<List<Choice>?>(null) }
     var ruleChoices by rememberSaveable { mutableStateOf<List<Choice>>(emptyList()) }
     LaunchedEffect(Unit) {
+        manager.ensureDefaultConfig()
         val others = manager.otherOverrides()
+        ruleChoices =
+            others.filter { NodeTemplateKind.of(it.content) == null }.map { config ->
+                Choice(config.id, config.name, if (config.id.startsWith("builtin-")) "内置" else config.contentType.name)
+            }
         selfChoices =
             others.filter { NodeTemplateKind.of(it.content) == NodeTemplateKind.SelfNodes }.map { config ->
                 val count = SelfNodesTemplate.nodeCount(config.content)
                 Choice(config.id, config.name, listOfNotNull("自建", count?.let { "$it 个节点" }).joinToString(" · "))
-            }
-        ruleChoices =
-            others.filter { NodeTemplateKind.of(it.content) == null }.map { config ->
-                Choice(config.id, config.name, if (config.id.startsWith("builtin-")) "内置" else config.contentType.name)
             }
     }
     val sourceChoices =
@@ -93,11 +97,12 @@ fun NewProfileFromSourcesScreen(navigator: Navigator) {
             selfChoices.orEmpty()
     val sourceIds = sourceChoices.map { it.id }
     var checkedSources by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
-    var checkedRules by rememberSaveable { mutableStateOf(listOf(ACL4SSR_ID)) }
-    // A single source is checked once, when the page first has its lists
+    var checkedRules by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    // The first picks, once the page has its lists: the default overrides, and a single source
     var picked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(selfChoices) {
         if (picked || selfChoices == null) return@LaunchedEffect
+        checkedRules = NewProfileDefaults.checked(defaults.overrideIds.value, ruleChoices.map { it.id })
         if (checkedSources.isEmpty() && sourceIds.size == 1) checkedSources = sourceIds
         picked = true
     }
@@ -239,9 +244,19 @@ fun NewProfileFromSourcesScreen(navigator: Navigator) {
                 }
                 item(key = "rules-title") {
                     Column(Modifier.animateItem()) {
-                        SectionHeader("规则覆写")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SectionHeader("覆写", Modifier.weight(1f))
+                            TextButton(
+                                onClick = {
+                                    defaults.overrideIds.set(rulesOn.map { it.id })
+                                    context.toast("已设为默认")
+                                },
+                                // Lines its text up with the title's
+                                modifier = Modifier.padding(end = 4.dp, top = 12.dp),
+                            ) { Text("设为默认") }
+                        }
                         Text(
-                            "勾选的覆写从上到下依次应用，拖动右侧把手调整顺序。都不勾时，只用基础配置里的一个组和一条规则",
+                            "勾选的覆写从上到下依次应用，拖动右侧把手调整顺序。都不勾时没有代理组，流量全部直连",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -286,12 +301,12 @@ fun NewProfileFromSourcesScreen(navigator: Navigator) {
 private data class Choice(val id: String, val label: String, val detail: String) : Serializable
 
 @Composable
-private fun SectionHeader(text: String) {
+private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
 }
 

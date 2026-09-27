@@ -32,10 +32,11 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
- * KimiNoBox: 「从节点源新建配置」 (docs/plan-a-round2.md C5). A local profile holding only the base
- * fields; its nodes come from the bound node sources and its groups and rules from the bound rule
- * override. Without a rule override the one group and rule of [BASE_CONFIG] keep it usable; a
- * rule override such as ACL4SSR replaces both.
+ * KimiNoBox: 「从节点源新建配置」 (docs/plan-a-round2.md C5). A local profile whose own file is
+ * empty ([NewProfileDefaults.EMPTY_PROFILE]): its nodes come from the bound node sources, and its
+ * base fields, groups and rules from 「默认配置」 when that is bound, then from the overrides after
+ * it (docs/plan-a-round4.md E3). With no override bound it has no group and no rule, so all traffic
+ * goes direct.
  */
 class NodeSourceProfileFactory(
     private val context: Context,
@@ -46,7 +47,7 @@ class NodeSourceProfileFactory(
     suspend fun create(name: String, overrideIds: List<String>): UUID =
         withContext(Dispatchers.IO) {
             val source = NodeSourceCopies.directory(context).resolve("profiles").resolve("base-${System.currentTimeMillis()}.yaml")
-            NodeSourceCopies.write(BASE_CONFIG.toByteArray(), source)
+            NodeSourceCopies.write(NewProfileDefaults.EMPTY_PROFILE.toByteArray(), source)
             val uuid = profiles.createProfile(Profile.Type.File, name, Uri.fromFile(source).toString())
             try {
                 val config = NodeSourceCopies.profileDir(context, uuid.toString()).resolve("config.yaml")
@@ -61,18 +62,4 @@ class NodeSourceProfileFactory(
                 throw error
             }
         }
-
-    companion object {
-        const val BASE_CONFIG =
-            "# Made by KimiNoBox from node sources: nodes from the bound node sources, groups and\n" +
-                "# rules from the bound rule override, or else the group and rule below.\n" +
-                "mixed-port: 7890\n" +
-                "mode: rule\n" +
-                "log-level: info\n" +
-                "ipv6: false\n" +
-                "proxy-groups:\n" +
-                "  - {name: 节点选择, type: select, include-all: true}\n" +
-                "rules:\n" +
-                "  - MATCH,节点选择\n"
-    }
 }

@@ -93,6 +93,7 @@ class NodeSourceManager(
     private val proxyFacade: ProxyFacade,
     private val downloader: NodeSourceDownloader,
     private val stateStore: NodeSourceStateStore,
+    private val defaults: NewProfileDefaultsStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val copyLock = Mutex()
@@ -325,6 +326,36 @@ class NodeSourceManager(
             }
         }
     }
+
+    /**
+     * Makes the 「默认配置」 override the first time 「从节点源新建配置」 needs it, and never again:
+     * once the user deletes it, it stays deleted (docs/plan-a-round4.md E3).
+     */
+    suspend fun ensureDefaultConfig() =
+        withContext(Dispatchers.IO) {
+            try {
+                val exists = configStore.exists(NewProfileDefaults.DEFAULT_CONFIG_ID)
+                if (NewProfileDefaults.makeDefaultConfig(defaults.defaultConfigMade.value, exists)) {
+                    val acl4ssr = configStore.getById(NewProfileDefaults.ACL4SSR_ID)?.content
+                    val now = System.currentTimeMillis()
+                    configStore.save(
+                        OverrideConfig(
+                            id = NewProfileDefaults.DEFAULT_CONFIG_ID,
+                            name = NewProfileDefaults.DEFAULT_CONFIG_NAME,
+                            contentType = OverrideContentType.Yaml,
+                            content = NewProfileDefaults.defaultConfig(acl4ssr),
+                            createdAt = now,
+                            updatedAt = now,
+                        )
+                    )
+                }
+                defaults.defaultConfigMade.set(true)
+            } catch (error: Exception) {
+                // The page still opens without it; the next opening tries again
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                Timber.w(error, "Could not make the default config override")
+            }
+        }
 
     /** Every override other than the subscription sources, for the profile's 覆写 section. */
     suspend fun otherOverrides(): List<OverrideConfig> =
