@@ -26,6 +26,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,6 +40,7 @@ import com.github.yumeyucca.yumebox.nodesource.NodeSource
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceManager
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceTemplate
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
+import com.github.yumeyucca.yumebox.nodesource.OverrideChain
 import com.github.yumeyucca.yumebox.presentation.component.Navigator
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.runtime.api.Profile
@@ -46,6 +48,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.More
 
@@ -68,8 +72,11 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
     var failure by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<NodeSource?>(null) }
     var picking by remember { mutableStateOf(false) }
-    val bound = sources.filter { profileId in it.boundProfileIds }
     val boundIds = binding?.overrideIds.orEmpty()
+    // In chain order: the order the user sorts them in, and the order they apply in (D5)
+    val bound = boundIds.mapNotNull { id -> sources.firstOrNull { it.id == id && profileId in it.boundProfileIds } }
+    val checkedOverrides = boundIds.mapNotNull { id -> overrides.firstOrNull { it.id == id } }
+    val uncheckedOverrides = overrides.filter { it.id !in boundIds }
     val clashes =
         remember(kernelNames, bound, boundIds, overrides) {
             val selfNames = overrides.filter { it.id in boundIds && NodeTemplateKind.of(it.content) == NodeTemplateKind.SelfNodes }
@@ -84,6 +91,28 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
             delay(REFRESH_MS)
         }
     }
+    // While a handle is dragged the rows move in these; the chain is written once, on release.
+    var sourceOrder by remember(bound.map { it.id }) { mutableStateOf(bound.map { it.id }) }
+    var overrideOrder by remember(checkedOverrides.map { it.id }) { mutableStateOf(checkedOverrides.map { it.id }) }
+    val latestChain by rememberUpdatedState(boundIds)
+    val writeOrder: (List<String>, (String) -> Boolean) -> Unit = { order, inGroup ->
+        val chain = latestChain
+        val reordered = OverrideChain.reorder(chain, order, inGroup)
+        if (reordered != chain) scope.launch { manager.setOverrideChain(profileId, reordered) }
+    }
+    val listState = rememberLazyListState()
+    val reorderState =
+        rememberReorderableLazyListState(listState) { from, to ->
+            val fromKey = from.key as? String ?: return@rememberReorderableLazyListState
+            val toKey = to.key as? String ?: return@rememberReorderableLazyListState
+            // A row only moves among its own kind: sources among sources, overrides among overrides.
+            when {
+                fromKey.startsWith(SOURCE_KEY) && toKey.startsWith(SOURCE_KEY) ->
+                    sourceOrder = sourceOrder.moved(fromKey.removePrefix(SOURCE_KEY), toKey.removePrefix(SOURCE_KEY))
+                fromKey.startsWith(OVERRIDE_KEY) && toKey.startsWith(OVERRIDE_KEY) ->
+                    overrideOrder = overrideOrder.moved(fromKey.removePrefix(OVERRIDE_KEY), toKey.removePrefix(OVERRIDE_KEY))
+            }
+        }
     val update: (List<NodeSource>) -> Unit = { targets ->
         scope.launch {
             val failed =
@@ -97,6 +126,7 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
     NodeSourceTheme {
         ModalBottomSheet(onDismissRequest = onDismiss) {
             LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -108,9 +138,17 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                 if (bound.isEmpty()) {
                     item { Hint("还没有节点源。节点源的节点会进入配置里 include-all: true 的代理组") }
                 }
-                items(bound, key = { it.id }) { source ->
+                items(sourceOrder.mapNotNull { id -> bound.firstOrNull { it.id == id } }, key = { SOURCE_KEY + it.id }) { source ->
+                    ReorderableItem(reorderState, key = SOURCE_KEY + source.id) {
                     SourceRow(
                         source = source,
+                        handle = {
+                            DragHandle(
+                                Modifier.draggableHandle(
+                                    onDragStopped = { writeOrder(sourceOrder) { id -> bound.any { it.id == id } } }
+                                )
+                            )
+                        },
                         updating = source.id in updating,
                         clash = clashes[source.form.name],
                         onUpdate = { update(listOf(source)) },
@@ -127,6 +165,7 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                         },
                         onShowError = { failure = it },
                     )
+                    }
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -161,30 +200,32 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                     HorizontalDivider()
                     Spacer(Modifier.height(4.dp))
                     SectionTitle("覆写")
-                    Hint("勾选的覆写按顺序应用在这个配置上，新勾选的放在最后")
+                    Hint("勾选的覆写从上到下依次应用，拖动右侧把手调整顺序")
                 }
-                items(overrides, key = { it.id }) { config ->
-                    val checked = config.id in boundIds
-                    Row(
-                        modifier =
-                            Modifier.fillMaxWidth().clickable {
-                                scope.launch { manager.setOverrideBound(profileId, config.id, !checked) }
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(
-                            checked = checked,
+                // Checked ones on top in chain order, each with a handle; unchecked below, no handle.
+                items(overrideOrder.mapNotNull { id -> checkedOverrides.firstOrNull { it.id == id } }, key = { OVERRIDE_KEY + it.id }) { config ->
+                    ReorderableItem(reorderState, key = OVERRIDE_KEY + config.id) {
+                        OverrideRow(
+                            config = config,
+                            checked = true,
                             onCheckedChange = { scope.launch { manager.setOverrideBound(profileId, config.id, it) } },
+                            handle = {
+                                DragHandle(
+                                    Modifier.draggableHandle(
+                                        onDragStopped = { writeOrder(overrideOrder) { id -> overrides.any { it.id == id } } }
+                                    )
+                                )
+                            },
                         )
-                        Column(Modifier.weight(1f)) {
-                            Text(config.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                overrideKind(config),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
+                }
+                items(uncheckedOverrides, key = { OVERRIDE_KEY + it.id }) { config ->
+                    OverrideRow(
+                        config = config,
+                        checked = false,
+                        onCheckedChange = { scope.launch { manager.setOverrideBound(profileId, config.id, it) } },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
         }
@@ -243,8 +284,52 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
 }
 
 @Composable
+private fun OverrideRow(
+    config: OverrideConfig,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    handle: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Column(Modifier.weight(1f)) {
+            Text(config.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                overrideKind(config),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        handle?.invoke()
+    }
+}
+
+/** The handle a row is dragged by; only a drag from here moves the row. */
+@Composable
+private fun DragHandle(modifier: Modifier) {
+    Icon(
+        DragHandleIcon,
+        contentDescription = "拖动排序",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(12.dp).size(24.dp),
+    )
+}
+
+private fun List<String>.moved(from: String, to: String): List<String> {
+    val fromIndex = indexOf(from)
+    val toIndex = indexOf(to)
+    if (fromIndex < 0 || toIndex < 0) return this
+    return toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+}
+
+@Composable
 private fun SourceRow(
     source: NodeSource,
+    handle: @Composable () -> Unit,
     updating: Boolean,
     clash: NodeNameClash.Clash?,
     onUpdate: () -> Unit,
@@ -288,6 +373,7 @@ private fun SourceRow(
                         )
                     }
                 }
+                handle()
             }
             if (info != null) {
                 NodeSourceFormat.traffic(info)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -341,3 +427,5 @@ private fun overrideKind(config: OverrideConfig): String =
     }
 
 private const val REFRESH_MS = 5_000L
+private const val SOURCE_KEY = "source:"
+private const val OVERRIDE_KEY = "override:"

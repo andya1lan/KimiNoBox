@@ -21,6 +21,15 @@
 package com.github.yumeyucca.yumebox.presentation.screen
 
 import com.github.yumeyucca.yumebox.core.model.Proxy
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * KimiNoBox: the provider names of a profile's node sources in its chain order, which the user sets
+ * in the node source sheet (docs/plan-a-round3.md D5). The app provides it.
+ */
+fun interface NodeSourceProviderOrder {
+    fun of(profileId: String): Flow<List<String>>
+}
 
 /**
  * KimiNoBox: a group's members in sections by the node source they come from, like zashboard's
@@ -38,10 +47,12 @@ internal object NodeSourceSections {
         setOf(Proxy.Type.Direct, Proxy.Type.Reject, Proxy.Type.RejectDrop, Proxy.Type.Compatible, Proxy.Type.Pass, Proxy.Type.PassRule)
 
     /**
-     * [sourceNodes]: node names of each node source, in the core's order. Null when the members
-     * come from fewer than two sources, so the list is shown as it was.
+     * [sourceNodes]: node names of each node source, in the core's order, which decides a name
+     * found in several. The sections follow [order] (the profile's chain order), sources it misses
+     * after them. Null when the members come from fewer than two sources, so the list is shown as
+     * it was.
      */
-    fun of(members: List<Proxy>, sourceNodes: Map<String, List<String>>): List<Section>? {
+    fun of(members: List<Proxy>, sourceNodes: Map<String, List<String>>, order: List<String> = emptyList()): List<Section>? {
         val sourceOf = HashMap<String, String>()
         sourceNodes.forEach { (source, names) -> names.forEach { sourceOf.putIfAbsent(it, source) } }
         val bySource = LinkedHashMap<String, MutableList<Proxy>>()
@@ -56,8 +67,11 @@ internal object NodeSourceSections {
                 else -> own += proxy
             }
         }
+        val rank = order.withIndex().associate { (index, name) -> name to index }
         val sources =
-            bySource.filterValues { it.isNotEmpty() }.map { (title, proxies) -> Section(title, proxies) } +
+            bySource.filterValues { it.isNotEmpty() }
+                .map { (title, proxies) -> Section(title, proxies) }
+                .sortedBy { rank[it.title] ?: Int.MAX_VALUE } +
                 listOfNotNull(Section(OWN_NODES, own).takeIf { own.isNotEmpty() })
         if (sources.size < 2) return null
         return listOfNotNull(Section(GROUPS, groups).takeIf { groups.isNotEmpty() }) + sources

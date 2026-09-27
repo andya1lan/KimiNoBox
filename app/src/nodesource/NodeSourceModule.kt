@@ -20,6 +20,7 @@
 
 package com.github.yumeyucca.yumebox.nodesource
 
+import com.github.yumeyucca.yumebox.presentation.screen.NodeSourceProviderOrder
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
@@ -40,4 +41,5 @@ val nodeSourceModule =
                 stateStore = get(),
             )
         }
+        single { NodeSourceProviderOrder { profileId -> get<NodeSourceManager>().providerOrder(profileId) } }
     }

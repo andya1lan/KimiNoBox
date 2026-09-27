@@ -56,6 +56,17 @@ class NodeSourceSectionsTest {
     }
 
     @Test
+    fun sectionsFollowTheChainOrderAndOwnNodesStayLast() {
+        val members = listOf(node("a1"), node("b1"), node("c1"), node("own"))
+        val sources = linkedMapOf("air" to listOf("a1"), "bay" to listOf("b1"), "cay" to listOf("c1"))
+
+        val sections = NodeSourceSections.of(members, sources, order = listOf("cay", "air"))!!
+
+        // The chain order first, then a source it doesn't name, then the config's own nodes.
+        assertEquals(listOf("cay", "air", "bay", NodeSourceSections.OWN_NODES), sections.map { it.title })
+    }
+
+    @Test
     fun oneSourceKeepsThePlainList() {
         val members = listOf(node("自动选择", Proxy.Type.URLTest), node("a"), node("b"))
 

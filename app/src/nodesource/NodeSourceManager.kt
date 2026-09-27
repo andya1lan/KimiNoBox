@@ -28,6 +28,7 @@ import com.github.yumeyucca.yumebox.data.controller.ActiveProfileOverrideReloade
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
 import com.github.yumeyucca.yumebox.data.model.OverrideContentType
 import com.github.yumeyucca.yumebox.data.model.OverrideMetadata
+import com.github.yumeyucca.yumebox.data.model.ProfileBinding
 import com.github.yumeyucca.yumebox.data.store.OverrideConfigStore
 import com.github.yumeyucca.yumebox.data.store.ProfileBindingProvider
 import com.github.yumeyucca.yumebox.data.store.RemoteControllerStore
@@ -37,6 +38,7 @@ import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -331,6 +333,27 @@ class NodeSourceManager(
         }
 
     fun boundOverrideIds(profileId: String) = bindings.getBindingFlow(profileId)
+
+    /**
+     * Writes [profileId]'s whole override chain at once (a reorder, docs/plan-a-round3.md D5), and
+     * applies it again if the profile is the running one.
+     */
+    suspend fun setOverrideChain(profileId: String, chain: List<String>) =
+        withContext(Dispatchers.IO) {
+            val binding = bindings.getBinding(profileId)
+            bindings.setBinding(binding?.setOverrides(chain) ?: ProfileBinding.withOverrides(profileId, chain))
+            reapplyIfActive(profileId)
+        }
+
+    /**
+     * Provider names of [profileId]'s node sources (subscriptions and self-hosted) in chain order.
+     * The core lists `include-all` providers by name whatever the chain says, so the proxy page
+     * takes its section order from here.
+     */
+    fun providerOrder(profileId: String): Flow<List<String>> =
+        combine(bindings.getBindingFlow(profileId), namesById) { binding, names ->
+            binding?.overrideIds.orEmpty().flatMap { names[it].orEmpty() }
+        }
 
     /** Binds or unbinds any override of [profileId]; a new one goes to the end of the chain. */
     suspend fun setOverrideBound(profileId: String, overrideId: String, bound: Boolean) =

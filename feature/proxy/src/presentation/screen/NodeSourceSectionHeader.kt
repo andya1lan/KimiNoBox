@@ -37,6 +37,7 @@ import com.github.yumeyucca.yumebox.data.store.ProxyDisplaySettingsStore
 import com.github.yumeyucca.yumebox.domain.model.ProxyGroupInfo
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
+import kotlinx.coroutines.flow.flowOf
 import org.koin.compose.koinInject
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -46,13 +47,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal fun rememberNodeSourceSections(group: ProxyGroupInfo, visible: List<Proxy>): List<NodeSourceSections.Section>? {
     val settings: ProxyDisplaySettingsStore = koinInject()
     val proxyFacade: ProxyFacade = koinInject()
+    val providerOrder: NodeSourceProviderOrder = koinInject()
     val enabled by settings.groupBySource.state.collectAsState()
+    val profileId = proxyFacade.currentProfile.collectAsState().value?.uuid?.toString()
+    val order by
+        remember(profileId) { profileId?.let(providerOrder::of) ?: flowOf(emptyList()) }
+            .collectAsState(initial = emptyList())
     // Starts from the last answer, so reopening a group does not show the flat list first
     val sourceNodes by
         produceState(lastSourceNodes, group.name, group.proxies.size, enabled) {
             if (enabled) value = proxyFacade.proxyProviderNodes().also { lastSourceNodes = it }
         }
-    return remember(visible, sourceNodes, enabled) { if (enabled) NodeSourceSections.of(visible, sourceNodes) else null }
+    return remember(visible, sourceNodes, enabled, order) {
+        if (enabled) NodeSourceSections.of(visible, sourceNodes, order) else null
+    }
 }
 
 private var lastSourceNodes: Map<String, List<String>> = emptyMap()
