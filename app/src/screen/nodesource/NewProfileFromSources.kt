@@ -24,19 +24,29 @@ package com.github.yumeyucca.yumebox.screen.nodesource
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceManager
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceProfileFactory
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
+import com.github.yumeyucca.yumebox.nodesource.SelfNodesTemplate
 import com.github.yumeyucca.yumebox.presentation.component.Navigator
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import kotlinx.coroutines.launch
@@ -46,8 +56,10 @@ private const val ACL4SSR_ID = "builtin-acl4ssr-online-full"
 
 /**
  * KimiNoBox: 「从节点源新建配置」 (C5): pick node sources and a rule override; the App makes a
- * local profile that binds them. [onCreated] runs after the profile is imported.
+ * local profile that binds them. [onCreated] runs after the profile is imported. A Material 3
+ * full-screen dialog (docs/plan-a-round3.md D6).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewProfileFromSourcesDialog(navigator: Navigator, onDismiss: () -> Unit, onCreated: () -> Unit) {
     val manager: NodeSourceManager = koinInject()
@@ -59,102 +71,167 @@ fun NewProfileFromSourcesDialog(navigator: Navigator, onDismiss: () -> Unit, onC
     LaunchedEffect(Unit) { others = manager.otherOverrides() }
     val selfNodes = others.filter { NodeTemplateKind.of(it.content) == NodeTemplateKind.SelfNodes }
     val rules = others.filter { NodeTemplateKind.of(it.content) == null }
-    val choices = sources.map { it.id to it.form.name } + selfNodes.map { it.id to it.name }
+    val choices =
+        sources.map { Choice(it.id, it.form.name, it.state.info?.nodeCount?.let { count -> "$count 个节点" } ?: "还没有下载") } +
+            selfNodes.map { config ->
+                val count = SelfNodesTemplate.nodeCount(config.content)
+                Choice(config.id, config.name, listOfNotNull("自建", count?.let { "$it 个节点" }).joinToString(" · "))
+            }
     var checked by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(choices.size) { if (checked.isEmpty() && choices.size == 1) checked = listOf(choices.single().first) }
+    LaunchedEffect(choices.size) { if (checked.isEmpty() && choices.size == 1) checked = listOfNotNull(choices.single().id) }
     var rule by remember { mutableStateOf<String?>(ACL4SSR_ID) }
     var name by remember { mutableStateOf("") }
     var nameTyped by remember { mutableStateOf(false) }
-    val suggested = checked.firstOrNull()?.let { id -> choices.firstOrNull { it.first == id }?.second }.orEmpty()
+    val suggested = checked.firstOrNull()?.let { id -> choices.firstOrNull { it.id == id }?.label }.orEmpty()
     val shownName = if (nameTyped) name else suggested
     var creating by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
+    val ruleChoices =
+        listOf(Choice(ACL4SSR_ID, "ACL4SSR Online Full", "内置")) +
+            rules.filter { it.id != ACL4SSR_ID }.map { config ->
+                Choice(config.id, config.name, if (config.id.startsWith("builtin-")) "内置" else config.contentType.name)
+            } +
+            listOf(Choice(null, "不使用规则覆写", "只用基础配置里的一个组和一条规则"))
+    val create: () -> Unit = {
+        creating = true
+        scope.launch {
+            runCatching { factory.create(shownName.trim(), checked + listOfNotNull(rule)) }
+                .onSuccess {
+                    context.toast("已创建「${shownName.trim()}」")
+                    onCreated()
+                    onDismiss()
+                }
+                .onFailure { failure = it.message ?: it::class.java.simpleName }
+            creating = false
+        }
+    }
 
-    NodeSourceTheme {
-        AlertDialog(
-            onDismissRequest = { if (!creating) onDismiss() },
-            title = { Text("从节点源新建配置") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("节点源", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    if (choices.isEmpty()) {
-                        Text("还没有节点源，先新建一个", style = MaterialTheme.typography.bodySmall)
-                    }
-                    choices.forEach { (id, label) ->
-                        CheckRow(label, id in checked) {
-                            checked = if (id in checked) checked - id else checked + id
-                        }
-                    }
-                    TextButton(
-                        onClick = {
-                            onDismiss()
-                            navigator.push(Route.NodeSourceEdit())
-                        }
-                    ) { Text("新建节点源") }
-                    Text("规则覆写", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    val ruleChoices =
-                        listOf(ACL4SSR_ID to "ACL4SSR Online Full（内置）") +
-                            rules.filter { it.id != ACL4SSR_ID }.map { it.id to it.name } +
-                            listOf(null to "不使用规则覆写")
-                    ruleChoices.forEach { (id, label) ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { rule = id },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = rule == id, onClick = { rule = id })
-                            Text(label, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                    OutlinedTextField(
-                        value = shownName,
-                        onValueChange = {
-                            name = it
-                            nameTyped = true
+    Dialog(
+        onDismissRequest = { if (!creating) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        NodeSourceTheme {
+            DialogSystemBars()
+            Scaffold(
+                topBar = {
+                    CenterAlignedTopAppBar(
+                        title = { Text("从节点源新建配置") },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss, enabled = !creating) { Icon(Icons.Filled.Close, contentDescription = "关闭") }
                         },
-                        label = { Text("配置名称") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        actions = {
+                            TextButton(onClick = create, enabled = !creating && checked.isNotEmpty() && shownName.isNotBlank()) {
+                                if (creating) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) else Text("创建")
+                            }
+                        },
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !creating && checked.isNotEmpty() && shownName.isNotBlank(),
-                    onClick = {
-                        creating = true
-                        scope.launch {
-                            runCatching { factory.create(shownName.trim(), checked + listOfNotNull(rule)) }
-                                .onSuccess {
-                                    context.toast("已创建「${shownName.trim()}」")
-                                    onCreated()
-                                    onDismiss()
-                                }
-                                .onFailure { failure = it.message ?: it::class.java.simpleName }
-                            creating = false
-                        }
-                    },
+                },
+            ) { padding ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    if (creating) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) else Text("创建")
+                    item {
+                        OutlinedTextField(
+                            value = shownName,
+                            onValueChange = {
+                                name = it
+                                nameTyped = true
+                            },
+                            label = { Text("配置名称") },
+                            supportingText = { Text("默认用第一个勾选的节点源的名称") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                    item { SectionHeader("节点源") }
+                    if (choices.isEmpty()) {
+                        item {
+                            ListItem(
+                                headlineContent = { Text("还没有节点源") },
+                                supportingContent = { Text("先新建一个，再回来创建配置") },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            )
+                        }
+                    }
+                    items(choices, key = { "source:" + it.id }) { choice ->
+                        val selected = choice.id in checked
+                        val toggle = { checked = if (selected) checked - choice.id!! else checked + choice.id!! }
+                        ListItem(
+                            headlineContent = { Text(choice.label) },
+                            supportingContent = { Text(choice.detail) },
+                            leadingContent = { Checkbox(checked = selected, onCheckedChange = { toggle() }) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.clickable(onClick = toggle),
+                        )
+                    }
+                    item {
+                        ListItem(
+                            headlineContent = { Text("新建节点源", color = MaterialTheme.colorScheme.primary) },
+                            leadingContent = {
+                                Icon(
+                                    Icons.Filled.Add,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier =
+                                Modifier.clickable {
+                                    onDismiss()
+                                    navigator.push(Route.NodeSourceEdit())
+                                },
+                        )
+                    }
+                    item { SectionHeader("规则覆写") }
+                    items(ruleChoices, key = { "rule:" + it.id }) { choice ->
+                        ListItem(
+                            headlineContent = { Text(choice.label) },
+                            supportingContent = { Text(choice.detail) },
+                            leadingContent = { RadioButton(selected = rule == choice.id, onClick = { rule = choice.id }) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.clickable { rule = choice.id },
+                        )
+                    }
                 }
-            },
-            dismissButton = { TextButton(onClick = onDismiss, enabled = !creating) { Text("取消") } },
-        )
-        failure?.let { reason ->
-            AlertDialog(
-                onDismissRequest = { failure = null },
-                title = { Text("创建失败") },
-                text = { Text(reason) },
-                confirmButton = { TextButton(onClick = { failure = null }) { Text("确定") } },
-                dismissButton = { TextButton(onClick = { context.copyText(reason) }) { Text("复制") } },
-            )
+            }
+            failure?.let { reason ->
+                AlertDialog(
+                    onDismissRequest = { failure = null },
+                    title = { Text("创建失败") },
+                    text = { Text(reason) },
+                    confirmButton = { TextButton(onClick = { failure = null }) { Text("确定") } },
+                    dismissButton = { TextButton(onClick = { context.copyText(reason) }) { Text("复制") } },
+                )
+            }
         }
     }
 }
 
+/** The dialog has a window of its own: its bar icons follow the dialog's colors, not the app's. */
 @Composable
-private fun CheckRow(label: String, checked: Boolean, onToggle: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onToggle), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+private fun DialogSystemBars() {
+    val view = LocalView.current
+    val window = (view.parent as? DialogWindowProvider)?.window ?: return
+    val light = MaterialTheme.colorScheme.background.luminance() >= 0.5f
+    SideEffect {
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
+        }
     }
+}
+
+/** One row to pick: [id] is null for 「不使用规则覆写」. */
+private data class Choice(val id: String?, val label: String, val detail: String)
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
 }

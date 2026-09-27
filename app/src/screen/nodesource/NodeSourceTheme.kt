@@ -20,6 +20,8 @@
 
 package com.github.yumeyucca.yumebox.screen.nodesource
 
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -33,13 +35,27 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /**
  * KimiNoBox: Material 3 for the node source screens, dressed in the app's own colors: every role
  * comes from the current miuix scheme (theme color, dark mode), so no Material default purple
- * shows up next to the rest of the app.
+ * shows up next to the rest of the app. The app's pages are miuix `surface`, so M3's page roles
+ * (background, surface, and surfaceContainerLow for the sheet) take it. Dialogs
+ * (surfaceContainerHigh) take miuix `background`, the color of the app's own dialogs. Cards take
+ * [appCardColors].
  */
 @Composable
 internal fun NodeSourceTheme(content: @Composable () -> Unit) {
     val colors = MiuixTheme.colorScheme
     MaterialTheme(colorScheme = materialSchemeOf(colors), content = content)
 }
+
+/**
+ * The colors of the app's own cards, as on ProfileCard: miuix `surfaceContainer`, with the page's
+ * text color.
+ */
+@Composable
+internal fun appCardColors(): CardColors =
+    CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    )
 
 private fun materialSchemeOf(c: Colors): ColorScheme {
     val dark = c.background.luminance() < 0.5f
@@ -62,8 +78,8 @@ private fun lightScheme(c: Colors): ColorScheme =
         onTertiary = c.onPrimaryVariant,
         tertiaryContainer = c.tertiaryContainer,
         onTertiaryContainer = c.onTertiaryContainer,
-        background = c.background,
-        onBackground = c.onBackground,
+        background = c.surface,
+        onBackground = c.onSurface,
         surface = c.surface,
         onSurface = c.onSurface,
         surfaceVariant = c.surfaceVariant,
@@ -80,7 +96,7 @@ private fun lightScheme(c: Colors): ColorScheme =
         scrim = Color.Black,
         surfaceBright = c.surface,
         surfaceContainer = c.surfaceContainer,
-        surfaceContainerHigh = c.surfaceContainerHigh,
+        surfaceContainerHigh = c.background,
         surfaceContainerHighest = c.surfaceContainerHighest,
         surfaceContainerLow = c.surface,
         surfaceContainerLowest = c.background,
@@ -102,8 +118,8 @@ private fun darkScheme(c: Colors): ColorScheme =
         onTertiary = c.onPrimaryVariant,
         tertiaryContainer = c.tertiaryContainer,
         onTertiaryContainer = c.onTertiaryContainer,
-        background = c.background,
-        onBackground = c.onBackground,
+        background = c.surface,
+        onBackground = c.onSurface,
         surface = c.surface,
         onSurface = c.onSurface,
         surfaceVariant = c.surfaceVariant,
@@ -120,7 +136,7 @@ private fun darkScheme(c: Colors): ColorScheme =
         scrim = Color.Black,
         surfaceBright = c.surfaceContainerHigh,
         surfaceContainer = c.surfaceContainer,
-        surfaceContainerHigh = c.surfaceContainerHigh,
+        surfaceContainerHigh = c.background,
         surfaceContainerHighest = c.surfaceContainerHighest,
         surfaceContainerLow = c.surface,
         surfaceContainerLowest = c.background,

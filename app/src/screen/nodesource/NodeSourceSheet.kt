@@ -27,10 +27,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -124,15 +128,18 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
     }
 
     NodeSourceTheme {
-        ModalBottomSheet(onDismissRequest = onDismiss) {
+        // Opens fully, so one back press closes it instead of first folding it to half height
+        ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    Text("节点源与覆写", style = MaterialTheme.typography.titleLarge)
-                    Text(profile.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.padding(horizontal = GUTTER)) {
+                        Text("节点源与覆写", style = MaterialTheme.typography.titleLarge)
+                        Text(profile.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 item { SectionTitle("节点源") }
                 if (bound.isEmpty()) {
@@ -168,13 +175,23 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                     }
                 }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = { update(bound) }, enabled = bound.isNotEmpty() && updating.isEmpty()) {
+                    Row(Modifier.padding(horizontal = GUTTER), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(
+                            onClick = { update(bound) },
+                            enabled = bound.isNotEmpty() && updating.isEmpty(),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                             Text("全部更新")
                         }
                         Box {
                             var menu by remember { mutableStateOf(false) }
-                            OutlinedButton(onClick = { menu = true }) { Text("添加节点源") }
+                            OutlinedButton(onClick = { menu = true }, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                                Text("添加节点源")
+                            }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 DropdownMenuItem(
                                     text = { Text("新建节点源") },
@@ -197,10 +214,11 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
                     }
                 }
                 item {
-                    HorizontalDivider()
-                    Spacer(Modifier.height(4.dp))
-                    SectionTitle("覆写")
-                    Hint("勾选的覆写从上到下依次应用，拖动右侧把手调整顺序")
+                    Column {
+                        HorizontalDivider(Modifier.padding(horizontal = GUTTER, vertical = 8.dp))
+                        SectionTitle("覆写")
+                        Hint("勾选的覆写从上到下依次应用，拖动右侧把手调整顺序")
+                    }
                 }
                 // Checked ones on top in chain order, each with a handle; unchecked below, no handle.
                 items(overrideOrder.mapNotNull { id -> checkedOverrides.firstOrNull { it.id == id } }, key = { OVERRIDE_KEY + it.id }) { config ->
@@ -291,21 +309,14 @@ private fun OverrideRow(
     modifier: Modifier = Modifier,
     handle: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Column(Modifier.weight(1f)) {
-            Text(config.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                overrideKind(config),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        handle?.invoke()
-    }
+    ListItem(
+        headlineContent = { Text(config.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(overrideKind(config)) },
+        leadingContent = { Checkbox(checked = checked, onCheckedChange = onCheckedChange) },
+        trailingContent = handle,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = modifier.clickable { onCheckedChange(!checked) },
+    )
 }
 
 /** The handle a row is dragged by; only a drag from here moves the row. */
@@ -315,7 +326,7 @@ private fun DragHandle(modifier: Modifier) {
         DragHandleIcon,
         contentDescription = "拖动排序",
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(12.dp).size(24.dp),
+        modifier = modifier.padding(8.dp).size(24.dp),
     )
 }
 
@@ -340,8 +351,8 @@ private fun SourceRow(
     onShowError: (String) -> Unit,
 ) {
     val info = source.state.info
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 12.dp, end = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Card(colors = appCardColors(), modifier = Modifier.fillMaxWidth().padding(horizontal = GUTTER)) {
+        Column(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp, end = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(source.form.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -356,10 +367,12 @@ private fun SourceRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (updating) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.padding(12.dp).size(20.dp))
-                } else {
-                    TextButton(onClick = onUpdate) { Text("更新") }
+                IconButton(onClick = onUpdate, enabled = !updating) {
+                    if (updating) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = "更新")
+                    }
                 }
                 Box {
                     var menu by remember { mutableStateOf(false) }
@@ -378,20 +391,27 @@ private fun SourceRow(
             if (info != null) {
                 NodeSourceFormat.traffic(info)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 NodeSourceFormat.usedFraction(info)?.let { fraction ->
-                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(end = 12.dp))
+                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().padding(end = 12.dp, top = 2.dp, bottom = 2.dp))
                 }
                 NodeSourceFormat.expiry(info)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Text(NodeSourceFormat.origin(info), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             source.state.lastError?.let { error ->
-                Text(
-                    "上次更新失败：$error",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(end = 12.dp).clickable { onShowError(error) },
-                )
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth().padding(end = 12.dp, top = 2.dp),
+                    onClick = { onShowError(error) },
+                ) {
+                    Text(
+                        "上次更新失败：$error",
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
             }
             clash?.let {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -411,12 +431,22 @@ private fun SourceRow(
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = GUTTER, end = GUTTER, top = 8.dp),
+    )
 }
 
 @Composable
 private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = GUTTER),
+    )
 }
 
 private fun overrideKind(config: OverrideConfig): String =
@@ -427,5 +457,6 @@ private fun overrideKind(config: OverrideConfig): String =
     }
 
 private const val REFRESH_MS = 5_000L
+private val GUTTER = 16.dp
 private const val SOURCE_KEY = "source:"
 private const val OVERRIDE_KEY = "override:"

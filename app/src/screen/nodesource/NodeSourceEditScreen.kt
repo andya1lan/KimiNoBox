@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -157,9 +159,10 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
                         .padding(padding)
                         .imePadding()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Address and 「获取」, what the download gave, then the source's own settings
                 OutlinedTextField(
                     value = input.url,
                     onValueChange = { input = input.copy(url = it) },
@@ -176,14 +179,24 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (fetching) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
+                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                         Text(FETCHING)
                     } else {
+                        if (fetched != null) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        }
                         Text(if (fetched == null) FETCH else FETCH_AGAIN)
                     }
                 }
                 fetched?.let { FetchedCard(it) }
+                Text(
+                    SETTINGS,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
                 OutlinedTextField(
                     value = input.name,
                     onValueChange = {
@@ -232,6 +245,7 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
                     NodeText.TEMPLATE_HINT,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
@@ -253,7 +267,7 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
 @Composable
 private fun FetchedCard(fetched: FetchedSource) {
     val info = fetched.info()
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    Card(colors = appCardColors(), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val format = if (fetched.check.format == ContentCheck.Format.ShareLinks) "分享链接" else "Clash YAML"
             Text("节点 ${fetched.check.nodeCount} 个 · $format", style = MaterialTheme.typography.titleSmall)
@@ -287,6 +301,7 @@ private const val FETCH = "获取"
 private const val FETCH_AGAIN = "重新获取"
 private const val FETCHING = "正在下载"
 private const val FETCH_FAILED = "获取失败"
+private const val SETTINGS = "设置"
 private const val NEED_FETCH = "请先点「获取」下载一次订阅"
 private const val NAME_MISSING = "订阅没有提供名称，请填写"
 private const val INTERVAL_SUPPORT = "内核按这个间隔自动更新，0 表示不自动更新"

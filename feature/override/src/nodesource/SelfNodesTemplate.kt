@@ -55,6 +55,9 @@ object SelfNodesTemplate {
         return NodeTemplateKind.SelfNodes.marker + "\n" + NodeYaml.serialize(root)
     }
 
+    /** How many nodes a self-nodes override holds, or null when it is not the template shape. */
+    fun nodeCount(content: String): Int? = parse(content)?.nodes?.size
+
     /** The form of a self-nodes override, or null when it is not the template shape. */
     fun parse(content: String): SelfNodesForm? {
         if (NodeTemplateKind.of(content) != NodeTemplateKind.SelfNodes) return null
