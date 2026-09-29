@@ -22,7 +22,7 @@ plugins {
     id("com.android.library")
     kotlin("plugin.compose")
 
-    id("ren.shiror.fyl.fytxt") version "2.+"
+    id("ren.shiror.fyl.fytxt") version "2.2607.6" // KimiNoBox: the version copied into gradle/fytxt-repo
 }
 
 fytxt {

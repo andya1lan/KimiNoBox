@@ -36,7 +36,8 @@ pluginManagement {
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
         maven("https://jitpack.io")
-        maven("https://maven.oom-wg.dev") {
+        // KimiNoBox: FYTxt and FVV come from a copy in the repo; their repository is gone
+        maven(file("gradle/fytxt-repo")) {
             content { includeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
         }
         maven("https://maven.aliyun.com/nexus/content/repositories/releases/") {
@@ -67,7 +68,8 @@ dependencyResolutionManagement {
 
         maven("https://jitpack.io")
         maven("https://raw.githubusercontent.com/MetaCubeX/maven-backup/main/releases")
-        maven("https://maven.oom-wg.dev") {
+        // KimiNoBox: FYTxt and FVV come from a copy in the repo; their repository is gone
+        maven(file("gradle/fytxt-repo")) {
             content { includeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
         }
         maven("https://maven.aliyun.com/nexus/content/repositories/releases/") {

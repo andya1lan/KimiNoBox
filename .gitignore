@@ -93,3 +93,6 @@ __pycache__/
 
 .qodana_work/
 /output_*/
+
+# KimiNoBox: the copy of FYTxt and FVV that the locale module builds with
+!/gradle/fytxt-repo/**
