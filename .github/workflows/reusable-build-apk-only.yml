@@ -158,7 +158,7 @@ jobs:
           echo "tail=${tail}" >> "$GITHUB_OUTPUT"
           echo "channel_segment=${channel_segment}" >> "$GITHUB_OUTPUT"
 
-      - name: Build Release APKs (geo + nogeo)
+      - name: Build Release APK (geo)
         shell: bash
         env:
           BUILD_NUMBER: ${{ steps.build_number.outputs.value }}
@@ -181,28 +181,16 @@ jobs:
           apk_output_dir="${{ inputs.module }}/build/outputs/apk/release"
           shopt -s nullglob
           mkdir -p apk-stage
-          # Do not let a rerun or a second packaging pass reuse an APK left in either
-          # staging directory. Each pass must contribute exactly one named variant.
+          # Do not let a rerun reuse an APK left in either staging directory.
           rm -f apk-stage/*.apk "${apk_output_dir}"/*.apk
 
+          # KimiNoBox: only the APK with bundled Geo data is released
           ./gradlew --no-daemon "${common_args[@]}" -Pgeo.bundle=true :${{ inputs.module }}:assembleRelease
-          builtin_apks=("${apk_output_dir}"/*-builtin-*.apk)
-          test "${#builtin_apks[@]}" -eq 1
-          cp "${builtin_apks[0]}" apk-stage/
+          geo_apks=("${apk_output_dir}"/*-geo-*.apk)
+          test "${#geo_apks[@]}" -eq 1
+          cp "${geo_apks[0]}" apk-stage/
 
-          # AGP may leave the previous variant in its output directory when only a
-          # packaging property changes. Remove it before the external pass so a broad
-          # glob can never copy the builtin APK a second time.
-          rm -f "${apk_output_dir}"/*.apk
-
-          # Second pass only re-merges assets and re-packages; compile and R8 stay
-          # up to date because geo.bundle feeds no compiler input (no BuildConfig field).
-          ./gradlew --no-daemon "${common_args[@]}" -Pgeo.bundle=false :${{ inputs.module }}:assembleRelease
-          external_apks=("${apk_output_dir}"/*-external-*.apk)
-          test "${#external_apks[@]}" -eq 1
-          cp "${external_apks[0]}" apk-stage/
-
-      - name: Verify staged APK matrix
+      - name: Verify staged APK
         shell: bash
         run: |
           set -eu
@@ -211,19 +199,7 @@ jobs:
           channel_suffix="${channel_segment:+-${channel_segment}}"
           # KimiNoBox: Gradle names the APKs after project.name
           prefix="$(grep '^project.name=' gradle.properties | cut -d= -f2-)"
-          ls "apk-stage/${prefix}-external${channel_suffix}-${tail}.apk"
-          ls "apk-stage/${prefix}-builtin${channel_suffix}-${tail}.apk"
-
-      - name: Write APK guide summary
-        shell: bash
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Choosing an APK variant
-
-          - `builtin`: Bundles GeoIP, GeoSite, and ASN data and works immediately after installation.
-          - `external`: Omits Geo data for a smaller APK, but requires a network download on first use.
-          - First-time users should choose `builtin` with bundled Geo data; both variants provide the same application features and core code.
-          EOF
+          ls "apk-stage/${prefix}-geo${channel_suffix}-${tail}.apk"
 
       - name: Upload raw APK artifact
         uses: actions/upload-artifact@v7

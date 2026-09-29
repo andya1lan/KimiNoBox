@@ -46,12 +46,9 @@ on:
         required: true
         type: string
     outputs:
-      default_apk_name:
-        description: "File name of the default publish APK (arm64-v8a, external geo) — reusable-notify-telegram.yml downloads its per-APK artifact by this exact name."
-        value: ${{ jobs.prepare.outputs.default_apk_name }}
-      builtin_apk_name:
-        description: "File name of the arm64-v8a APK with bundled geo databases."
-        value: ${{ jobs.prepare.outputs.builtin_apk_name }}
+      geo_apk_name:
+        description: "File name of the arm64-v8a APK with bundled geo databases, the only APK KimiNoBox publishes."
+        value: ${{ jobs.prepare.outputs.geo_apk_name }}
 
 permissions:
   contents: read
@@ -60,8 +57,7 @@ jobs:
   prepare:
     runs-on: ubuntu-26.04
     outputs:
-      default_apk_name: ${{ steps.stem.outputs.external_arm64 }}.apk
-      builtin_apk_name: ${{ steps.stem.outputs.builtin_arm64 }}.apk
+      geo_apk_name: ${{ steps.stem.outputs.geo_arm64 }}.apk
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -120,10 +116,7 @@ jobs:
           tail="${{ inputs.apk_name_tail }}"
           prefix="${{ inputs.artifact_prefix }}"
           channel_segment="${{ inputs.channel_segment }}"
-          {
-            echo "external_arm64=$(python3 scripts/ci_apk_stem.py "${prefix}" external arm64-v8a "${channel_segment}" "${tail}")"
-            echo "builtin_arm64=$(python3 scripts/ci_apk_stem.py "${prefix}" builtin arm64-v8a "${channel_segment}" "${tail}")"
-          } >> "$GITHUB_OUTPUT"
+          echo "geo_arm64=$(python3 scripts/ci_apk_stem.py "${prefix}" geo arm64-v8a "${channel_segment}" "${tail}")" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
         shell: bash
@@ -154,14 +147,12 @@ jobs:
           mkdir -p publish
           version_name="${{ steps.version.outputs.version_name }}"
           version_code="${{ steps.version.outputs.version_code }}"
-          stem_external="${{ steps.stem.outputs.external_arm64 }}"
-          stem_builtin="${{ steps.stem.outputs.builtin_arm64 }}"
+          stem_geo="${{ steps.stem.outputs.geo_arm64 }}"
           release_url="https://github.com/${{ github.repository }}/releases/tag/${{ inputs.release_tag }}"
           publish_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
           names=(
-            "${stem_external}.apk"
-            "${stem_builtin}.apk"
+            "${stem_geo}.apk"
           )
           for name in "${names[@]}"; do
             test -f "raw-apk/${name}"
@@ -169,7 +160,7 @@ jobs:
           done
 
           actual="$(find publish -maxdepth 1 -type f -name '*.apk' | wc -l)"
-          expected=2
+          expected=1
           if [ "${actual}" -ne "${expected}" ]; then
             echo "Expected ${expected} publish APKs, got ${actual}:" >&2
             ls publish >&2
@@ -210,7 +201,7 @@ jobs:
           packages = []
           for apk in sorted(publish_dir.glob("*.apk")):
               name = apk.name
-              geo_bundled = name.startswith(f"{artifact_prefix}-builtin-")
+              geo_bundled = name.startswith(f"{artifact_prefix}-geo-")
               abi = "arm64-v8a"
 
               h = hashlib.sha256()
@@ -266,20 +257,11 @@ jobs:
       # the raw .apk is stored as-is (no zip wrapper, no recompression) and downloads
       # directly as an installer. NOTE: with archive:false the artifact takes the FILE
       # name and the `name:` input is ignored, so these artifacts appear exactly as the
-      # publish file names from "Prepare publish artifacts". The notification workflow downloads
-      # both arm64-v8a variants via the outputs above.
-      - name: Upload arm64-v8a APK artifact (external geo)
+      # publish file names from "Prepare publish artifacts".
+      - name: Upload arm64-v8a APK artifact (geo)
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.stem.outputs.external_arm64 }}
-          path: publish/${{ steps.stem.outputs.external_arm64 }}.apk
-          if-no-files-found: error
-          archive: false
-
-      - name: Upload arm64-v8a APK artifact (builtin geo)
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.stem.outputs.builtin_arm64 }}
-          path: publish/${{ steps.stem.outputs.builtin_arm64 }}.apk
+          name: ${{ steps.stem.outputs.geo_arm64 }}
+          path: publish/${{ steps.stem.outputs.geo_arm64 }}.apk
           if-no-files-found: error
           archive: false

@@ -125,7 +125,8 @@ val apkOutputTail =
     providers.gradleProperty("apk.output.tail").orNull?.trim()?.takeIf { it.isNotEmpty() }
 val apkChannelSegment =
     providers.gradleProperty("apk.output.channel").orNull?.trim()?.takeIf { it.isNotEmpty() }
-val apkGeoSegment = if (geoBundle) "builtin" else "external"
+// KimiNoBox: releases ship only the APK with bundled Geo data, named geo
+val apkGeoSegment = if (geoBundle) "geo" else "external"
 
 // Resolve the tracked mihomo tree at configure time so About / BuildConfig can show branch + hash
 // without a runtime JNI probe (the core is out-of-process now). Prefer kernel.properties for the
