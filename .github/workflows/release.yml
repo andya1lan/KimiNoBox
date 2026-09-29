@@ -29,8 +29,9 @@ permissions:
 # (gradle.properties) + `git rev-list --count HEAD` themselves, so every release gets a
 # unique versionCode in the same sequence as channel packages - upgrading from a channel
 # build of an older commit to a release of a newer commit is no longer a downgrade.
-# publish-release runs with prerelease=false -> generate_release_notes=false (empty body,
-# edited by hand afterwards) and make_latest=true (channel == 'stable').
+# publish-release runs with prerelease=false -> generate_release_notes=false (KimiNoBox: the
+# body starts as the install note; the change notes are added by hand) and make_latest=true
+# (channel == 'stable').
 jobs:
   build-geo-stable:
     name: Geo (Stable)
