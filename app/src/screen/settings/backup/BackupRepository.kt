@@ -84,7 +84,7 @@ class BackupRepository internal constructor(
 
     fun defaultBackupFileName(now: Long = System.currentTimeMillis()): String {
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date(now))
-        return "YumeBox-backup-$timestamp.zip"
+        return "KimiNoBox-backup-$timestamp.zip" // KimiNoBox
     }
 
     private fun writeCurrentBackup(output: OutputStream) {

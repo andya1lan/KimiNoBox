@@ -151,7 +151,7 @@ fun AboutScreen(navigator: Navigator) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                text = "YumeBox",
+                                text = "KimiNoBox", // KimiNoBox
                                 style =
                                     MiuixTheme.textStyles.title1.copy(
                                         fontSize = 44.sp,
@@ -176,8 +176,8 @@ fun AboutScreen(navigator: Navigator) {
 
                 AppCard {
                     BasicComponent(
-                        title = "YumeBox",
-                        summary = "An open-source Android client based Mihomo",
+                        title = "KimiNoBox", // KimiNoBox: named as a modified version of YumeBox
+                        summary = "A modified version of YumeBox, an open-source Android client based on Mihomo",
                         onClick = {
                             myBooksTapCount = (myBooksTapCount + 1).coerceAtMost(5)
                             if (myBooksTapCount == 5) showDebugPanel = true
@@ -207,6 +207,13 @@ fun AboutScreen(navigator: Navigator) {
 
                 Title(YumeTxt.About.Section.ProjectLinks)
                 AppCard {
+                    // KimiNoBox: its source first, then the project it comes from
+                    AboutLinkItem(
+                        title = "KimiNoBox",
+                        url = KIMINOBOX_REPO,
+                        onOpenUrl = { url -> openUrl(context, url) },
+                        showArrow = false,
+                    )
                     AboutLinkItem(
                         title = "YumeBox",
                         url = "https://github.com/YumeYucca/YumeBox",
@@ -221,17 +228,7 @@ fun AboutScreen(navigator: Navigator) {
                     )
                 }
 
-                Title(YumeTxt.About.Section.More)
-                AppCard {
-                    ArrowPreference(
-                        title = YumeTxt.About.Link.TelegramGroup,
-                        onClick = { openUrl(context, "https://t.me/OOM_Group") },
-                    )
-                    ArrowPreference(
-                        title = YumeTxt.About.Link.TelegramChannel,
-                        onClick = { openUrl(context, "https://t.me/YumeYucca") },
-                    )
-                }
+                // KimiNoBox: YumeBox's Telegram group and channel are not for this app
 
                 Title(YumeTxt.About.Section.Support)
                 AppCard {
@@ -239,17 +236,14 @@ fun AboutScreen(navigator: Navigator) {
                         title = YumeTxt.About.Support.ExportLogs,
                         onClick = {
                             exportLogsLauncher.launch(
-                                "yumebox_diagnostics_${System.currentTimeMillis()}.log"
+                                "kiminobox_diagnostics_${System.currentTimeMillis()}.log" // KimiNoBox
                             )
                         },
                     )
                     ArrowPreference(
                         title = YumeTxt.About.Support.ReportIssue,
                         onClick = {
-                            openUrl(
-                                context,
-                                "https://github.com/YumeYucca/YumeBox/issues/new/choose",
-                            )
+                            openUrl(context, "$KIMINOBOX_REPO/issues") // KimiNoBox
                         },
                     )
                 }
@@ -288,7 +282,7 @@ private fun exportStartupLogs(context: Context, targetUri: Uri): Boolean {
     val runtimeLog = RuntimeLog.snapshot(context)
     val coreLog = CoreProcess.coreDiagnosticLog(context)
     val export = buildString {
-        appendLine("# YumeBox runtime diagnostics")
+        appendLine("# KimiNoBox runtime diagnostics") // KimiNoBox
         appendLine("# app=${BuildConfig.VERSION_NAME} core=${BuildConfig.CORE_VERSION}")
         appendLine()
         appendLine("# runtime.log")
@@ -323,3 +317,5 @@ private fun AboutLinkItem(
         BasicComponent(title = title, summary = url, onClick = { onOpenUrl(url) })
     }
 }
+
+private const val KIMINOBOX_REPO = "https://github.com/andya1lan/KimiNoBox" // KimiNoBox

@@ -1,6 +1,6 @@
 <Home Page>
 Home = {
-    Title = "YumeBox"
+    Title = "KimiNoBox"
 
     Message = {
         ConfigSwitched = "Профиль переключён"
@@ -66,7 +66,7 @@ Home = {
     }
 
     PreviewGuide = {
-        Title = "Добро пожаловать в YumeBox"
+        Title = "Добро пожаловать в KimiNoBox"
         Description = "Нажмите «Старт» внизу, чтобы подключиться"
         Next = "Далее"
         Start = "Начать"

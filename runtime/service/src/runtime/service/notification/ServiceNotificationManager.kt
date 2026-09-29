@@ -314,14 +314,14 @@ class ServiceNotificationManager(
             Config(
                 notificationId = 1001,
                 channelId = "yumebox_vpn_service",
-                channelName = "YumeBox VPN Service",
+                channelName = "KimiNoBox VPN Service", // KimiNoBox
             )
 
         val rootConfig =
             Config(
                 notificationId = 1002,
                 channelId = "yumebox_root_service",
-                channelName = "YumeBox Root Service",
+                channelName = "KimiNoBox Root Service", // KimiNoBox
             )
     }
 }

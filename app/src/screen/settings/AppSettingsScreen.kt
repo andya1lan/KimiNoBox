@@ -37,7 +37,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.net.toUri
-import com.github.yumeyucca.yumebox.common.util.openUrl
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.data.model.AppLanguage
 import com.github.yumeyucca.yumebox.data.model.ThemeMode
@@ -189,10 +188,7 @@ private fun AppInterfaceSettingsSection(viewModel: AppSettingsViewModel) {
             checked = useSystemWallpaper,
             onCheckedChange = viewModel::onUseSystemWallpaperChange,
         )
-        PreferenceArrowItem(
-            title = YumeTxt.AppSettings.Interface.CustomIconTitle,
-            onClick = { openUrl(context, "https://yumebox.yumeyuka.moe/guide/icon-builder") },
-        )
+        // KimiNoBox: the custom icon guide is YumeBox's own
     }
 }
 

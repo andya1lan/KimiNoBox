@@ -316,7 +316,7 @@ class AutoRestartService : Service() {
 
     private fun createNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("YumeBox")
+            .setContentTitle("KimiNoBox") // KimiNoBox
             .setContentText("Checking auto-start...")
             .setSmallIcon(ServiceLogoIcons.resId())
             .setOngoing(true)

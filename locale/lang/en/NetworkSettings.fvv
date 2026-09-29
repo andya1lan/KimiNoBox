@@ -103,7 +103,7 @@ NetworkSettings = {
         EmptyRules = "No Wi-Fi rules"
         VpnOnly = "Wi-Fi automation is available only in VPN mode"
         PermissionTitle = "Allow reading Wi-Fi name"
-        PermissionMessage = "Android treats Wi-Fi names as location-sensitive information. YumeBox uses precise location only when you enable automation or tap Scan Wi-Fi, to match rules on this device or show scan results. It does not read GPS or upload Wi-Fi names."
+        PermissionMessage = "Android treats Wi-Fi names as location-sensitive information. KimiNoBox uses precise location only when you enable automation or tap Scan Wi-Fi, to match rules on this device or show scan results. It does not read GPS or upload Wi-Fi names."
         ApproximateTitle = "Precise location is required"
         ApproximateMessage = "Approximate location still hides the Wi-Fi name. Allow precise location to continue."
         DeniedTitle = "Location permission is required"
@@ -111,7 +111,7 @@ NetworkSettings = {
         SettingsTitle = "Enable location permission in Settings"
         SettingsMessage = "Android will no longer show this permission request. In App info > Permissions > Location, choose Allow only while using the app and enable precise location."
         LocationTitle = "Turn on system location"
-        LocationMessage = "Android hides Wi-Fi names while system location is off. YumeBox does not read GPS."
+        LocationMessage = "Android hides Wi-Fi names while system location is off. KimiNoBox does not read GPS."
         Grant = "Grant permission"
         OpenSettings = "Open settings"
         TurnOnLocation = "Turn on location"
@@ -123,6 +123,6 @@ NetworkSettings = {
 
     Error = {
         VpnDenied = "VPN permission denied"
-        RootRequired = "Root mode requires YumeBox to have working root access"
+        RootRequired = "Root mode requires KimiNoBox to have working root access"
     }
 }

@@ -72,7 +72,8 @@ class VpnTunTransport(
 
                 setBlocking(false)
                 setMtu(TUN_MTU)
-                setSession("YumeBox")
+                // KimiNoBox: session named after the app label so coexisting forks stay apart
+                setSession(vpnService.applicationInfo.loadLabel(vpnService.packageManager).toString())
                 addDnsServer(TUN_DNS)
                 if (store.allowIpv6) {
                     addDnsServer(TUN_DNS6)

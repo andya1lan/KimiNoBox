@@ -34,7 +34,7 @@ Onboarding = {
     Privacy = {
         Title = "プライバシー条項を確認"
         Subtitle = "内容を確認して同意すると続行できます"
-        RichTextLead = "YumeBox を使う前にプライバシー条項への同意が必要です."
+        RichTextLead = "KimiNoBox を使う前にプライバシー条項への同意が必要です."
         RichTextPrefix = "続行する前に "
         RichTextConnector = " と "
         RichTextSuffix = " を確認して同意してください."
@@ -58,7 +58,7 @@ Onboarding = {
     Project = {
         Github = {
             Title = "GitHub リポジトリ"
-            Summary = "github.com/yumeyucca/YumeBox"
+            Summary = "github.com/andya1lan/KimiNoBox"
         }
         Community = {
             Title = "コミュニティ"

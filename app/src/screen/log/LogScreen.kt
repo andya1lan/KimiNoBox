@@ -451,6 +451,6 @@ private fun copyLogEntry(context: Context, entry: LiveLogEntry) {
     val text = "[${entry.time}] [${entry.level.name}] ${entry.message}"
     context
         .getSystemService(ClipboardManager::class.java)
-        ?.setPrimaryClip(ClipData.newPlainText("YumeBox log", text))
+        ?.setPrimaryClip(ClipData.newPlainText("KimiNoBox log", text)) // KimiNoBox
     context.toast(YumeTxt.Log.Action.Copied)
 }
