@@ -28,6 +28,7 @@ import com.github.yumeyucca.yumebox.common.util.formatBytesForDisplay
 import com.github.yumeyucca.yumebox.presentation.component.CountryFlagCircle
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.util.extractFlaggedName
+import com.github.yumeyucca.yumebox.screen.home.NodeDelayTest // KimiNoBox
 import tf.gal.yumebox.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -87,13 +88,11 @@ internal fun MoeHomeInfoPanel(
     serverName: String?,
     serverPing: Int?,
     modifier: Modifier = Modifier,
+    delayTesting: Boolean = false, // KimiNoBox
+    onTestDelay: () -> Unit = {}, // KimiNoBox: a tap on the delay tests the node again
 ) {
     val node = remember(serverName) { serverName?.let(::extractFlaggedName) }
     val name = node?.displayName ?: serverName.orEmpty()
-    val ping =
-        serverPing
-            ?.takeIf { it in 1..1000 }
-            ?.let { value -> YumeTxt.Home.NodeInfo.DelayValue.format(value) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -117,14 +116,17 @@ internal fun MoeHomeInfoPanel(
         } else Spacer(Modifier
             .weight(1f)
             .padding(end = MoeUi.Info.trailingPadding))
-        if (ping != null) {
-            MoeInfoBlock(
-                value = ping,
-                modifier = Modifier.width(MoeUi.Hero.delayWidth),
-                valueColor =
-                    if (serverPing < 500) AppTheme.colors.moe.pingExcellent
-                    else AppTheme.colors.moe.pingWarning,
-                alignEnd = true,
+        // KimiNoBox: shown untested too, so it can be tapped to test
+        if (name.isNotBlank()) {
+            NodeDelayTest(
+                delay = serverPing,
+                testing = delayTesting,
+                onTest = onTestDelay,
+                fastColor = AppTheme.colors.moe.pingExcellent,
+                slowColor = AppTheme.colors.moe.pingWarning,
+                style = MiuixTheme.textStyles.body1,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.widthIn(min = MoeUi.Hero.delayWidth),
             )
         }
     }

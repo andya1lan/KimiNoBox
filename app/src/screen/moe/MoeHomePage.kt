@@ -90,6 +90,7 @@ fun MoeHomePage(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val screen by homeViewModel.screenState.collectAsState()
+    val delayTesting by homeViewModel.delayTesting.collectAsState() // KimiNoBox
     val moe by appSettingsViewModel.moeHomeSectionState.collectAsState()
     val controlState = screen.controlState
     val profiles = screen.profiles
@@ -285,6 +286,7 @@ fun MoeHomePage(
             usesTabletLayout = windowLayoutMode.usesNavigationRail,
             // KimiNoBox: E5 — the IP was already polled for this page, only never shown
             externalIp = (screen.ipMonitoringState as? IpMonitoringState.Success)?.externalIp,
+            delayTesting = delayTesting, // KimiNoBox
         )
     val actions =
         MoeHomeActions(
@@ -299,6 +301,7 @@ fun MoeHomePage(
             },
             openSettings = { showHomeSettingsSheet = true },
             toggleProxy = handleProxyAction,
+            testDelay = homeViewModel::testSelectedNodeDelay, // KimiNoBox
         )
     CompositionLocalProvider(LocalWallpaperRefreshKey provides wallpaperRefreshKey) {
         with(actions) { MoeHomeLayout(layoutState) }

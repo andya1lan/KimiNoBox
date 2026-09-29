@@ -71,6 +71,7 @@ internal data class MoeHomeLayoutState(
     val isRemoteController: Boolean,
     val usesTabletLayout: Boolean = false,
     val externalIp: IpInfo? = null, // KimiNoBox: egress IP row (E5)
+    val delayTesting: Boolean = false, // KimiNoBox
 )
 
 internal class MoeHomeActions(
@@ -78,6 +79,7 @@ internal class MoeHomeActions(
     val pickWallpaper: () -> Unit,
     val openSettings: () -> Unit,
     val toggleProxy: () -> Unit,
+    val testDelay: () -> Unit = {}, // KimiNoBox
 )
 
 @Composable
@@ -255,6 +257,8 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
                     serverName = state.selectedServerName.takeIf { state.isRunning },
                     serverPing = state.selectedServerPing.takeIf { state.isRunning },
                     modifier = Modifier.fillMaxWidth(),
+                    delayTesting = state.delayTesting, // KimiNoBox
+                    onTestDelay = actions.testDelay, // KimiNoBox
                 )
                 MoeCardExternalIp(state.externalIp) // KimiNoBox: E5
             }
@@ -415,6 +419,8 @@ private fun MoeTabletHomeLayout(
                                 serverName = state.selectedServerName.takeIf { state.isRunning },
                                 serverPing = state.selectedServerPing.takeIf { state.isRunning },
                                 modifier = Modifier.fillMaxWidth(),
+                                delayTesting = state.delayTesting, // KimiNoBox
+                                onTestDelay = actions.testDelay, // KimiNoBox
                             )
                             MoeCardExternalIp(state.externalIp) // KimiNoBox: E5
                         }

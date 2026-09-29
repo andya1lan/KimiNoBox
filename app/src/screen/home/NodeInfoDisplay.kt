@@ -38,7 +38,13 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun NodeInfoDisplay(serverName: String?, serverPing: Int?, modifier: Modifier = Modifier) {
+fun NodeInfoDisplay(
+    serverName: String?,
+    serverPing: Int?,
+    modifier: Modifier = Modifier,
+    delayTesting: Boolean = false, // KimiNoBox
+    onTestDelay: (() -> Unit)? = null, // KimiNoBox: a tap on the delay tests the node again
+) {
     val spacing = AppTheme.spacing
     val componentSizes = AppTheme.sizes
 
@@ -94,7 +100,7 @@ fun NodeInfoDisplay(serverName: String?, serverPing: Int?, modifier: Modifier = 
 
         Column(
             horizontalAlignment = Alignment.End,
-            modifier = Modifier.width(componentSizes.nodeDelayColumnWidth),
+            modifier = Modifier.widthIn(min = componentSizes.nodeDelayColumnWidth), // KimiNoBox
         ) {
             Text(
                 text = YumeTxt.Home.NodeInfo.Delay,
@@ -102,7 +108,20 @@ fun NodeInfoDisplay(serverName: String?, serverPing: Int?, modifier: Modifier = 
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             Spacer(modifier = Modifier.height(spacing.space4))
-            PingValue(ping = serverPing)
+            // KimiNoBox
+            if (hasKnownNode && onTestDelay != null) {
+                NodeDelayTest(
+                    delay = serverPing,
+                    testing = delayTesting,
+                    onTest = onTestDelay,
+                    fastColor = AppTheme.colors.latency.fast,
+                    slowColor = AppTheme.colors.latency.moderate,
+                    style = MiuixTheme.textStyles.body1.copy(lineHeight = 20.sp),
+                    modifier = Modifier.height(infoTextHeight),
+                )
+            } else {
+                PingValue(ping = serverPing)
+            }
         }
     }
 }

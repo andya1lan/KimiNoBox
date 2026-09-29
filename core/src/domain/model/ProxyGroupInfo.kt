@@ -63,13 +63,14 @@ fun ProxyGroup.toInfo(): ProxyGroupInfo =
  * ([PRIMARY_GROUP_NAME]) when there is one, otherwise the first group.
  */
 fun List<ProxyGroupInfo>.resolvePrimaryNode(): Proxy? {
-    val group =
-        firstOrNull { it.name.equals(PRIMARY_GROUP_NAME, ignoreCase = true) }
-            ?: firstOrNull()
-            ?: return null
+    val group = primaryGroup() ?: return null // KimiNoBox
     val selected = group.now.trim()
     return if (selected.isEmpty()) null else resolveTerminalProxy(selected)
 }
+
+/** KimiNoBox: the group [resolvePrimaryNode] starts from. */
+fun List<ProxyGroupInfo>.primaryGroup(): ProxyGroupInfo? =
+    firstOrNull { it.name.equals(PRIMARY_GROUP_NAME, ignoreCase = true) } ?: firstOrNull()
 
 /**
  * Delay shown beside the selected node on a group card.

@@ -58,6 +58,7 @@ fun HomePager(
     val homeViewModel = koinViewModel<HomeViewModel>()
     val navigator = LocalNavigator.current
     val screen by homeViewModel.screenState.collectAsState()
+    val delayTesting by homeViewModel.delayTesting.collectAsState() // KimiNoBox
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -160,6 +161,8 @@ fun HomePager(
                         NodeInfoDisplay(
                             serverName = screen.selectedServerName.takeIf { isRunning },
                             serverPing = screen.selectedServerPing.takeIf { isRunning },
+                            delayTesting = delayTesting, // KimiNoBox
+                            onTestDelay = homeViewModel::testSelectedNodeDelay, // KimiNoBox
                         )
                         IpInfoDisplay(
                             state =
