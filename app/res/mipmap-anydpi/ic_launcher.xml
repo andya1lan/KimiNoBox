@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- KimiNoBox: its own icon; YumeBox's icon is not for forks. The painting is the foreground,
+     which the panel shortcut dialog also shows as the default shortcut icon. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
   <background android:drawable="@mipmap/ic_launcher_background"/>
   <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+  <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
 </adaptive-icon>

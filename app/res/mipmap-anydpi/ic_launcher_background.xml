@@ -18,12 +18,22 @@
   ~
   -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <!-- two meteors, from the painting of the launcher icon -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M6.03,14.6L21,3L9.4,17.97A2.4,2.4 0 1,1 6.03,14.6ZM7.5,11Q8.1,15.9 13,16.5Q8.1,17.1 7.5,22Q6.9,17.1 2,16.5Q6.9,15.9 7.5,11ZM16.25,16.38L22,12.5L18.12,18.25A1.35,1.35 0 1,1 16.25,16.38Z" />
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0" android:color="#FF5C6BC0" />
+                <item android:offset="1" android:color="#FF283593" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>
