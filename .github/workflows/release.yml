@@ -44,7 +44,8 @@ jobs:
     uses: ./.github/workflows/reusable-build-native-abi.yml
     with:
       channel: stable
-      kernel_channel: alpha
+      # KimiNoBox: the core release kernel.properties names (v1.19.31), not the newest Alpha
+      kernel_channel: pinned
       abi: arm64-v8a
     secrets: inherit
 
@@ -66,7 +67,7 @@ jobs:
       channel: stable
       module: app
       release_tag: ${{ inputs.release_tag }}
-      meta_asset_name: YumeBox-stable-meta.json
+      meta_asset_name: KimiNoBox-stable-meta.json # KimiNoBox
       raw_apk_artifact_name: apk-raw-stable-app
     secrets: inherit
 
@@ -77,9 +78,9 @@ jobs:
     with:
       channel: stable
       module: app
-      artifact_prefix: YumeBox
+      artifact_prefix: KimiNoBox # KimiNoBox
       release_tag: ${{ inputs.release_tag }}
-      meta_asset_name: YumeBox-stable-meta.json
+      meta_asset_name: KimiNoBox-stable-meta.json # KimiNoBox
       raw_apk_artifact_name: apk-raw-stable-app
       publish_artifact_name: publish-stable-app
       apk_name_tail: ${{ needs.build-apk-stable-app.outputs.apk_name_tail }}
@@ -96,6 +97,8 @@ jobs:
       prerelease: false
       publish_artifacts: publish-stable-app
       recreate_release: false
+      # KimiNoBox: a draft, published by hand once its APK is checked and its notes are written
+      draft: true
     secrets: inherit
 
   cleanup-artifacts:

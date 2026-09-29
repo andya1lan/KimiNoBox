@@ -209,8 +209,10 @@ jobs:
           tail="${{ steps.apk_name.outputs.tail }}"
           channel_segment="${{ steps.apk_name.outputs.channel_segment }}"
           channel_suffix="${channel_segment:+-${channel_segment}}"
-          ls "apk-stage/YumeBox-external${channel_suffix}-${tail}.apk"
-          ls "apk-stage/YumeBox-builtin${channel_suffix}-${tail}.apk"
+          # KimiNoBox: Gradle names the APKs after project.name
+          prefix="$(grep '^project.name=' gradle.properties | cut -d= -f2-)"
+          ls "apk-stage/${prefix}-external${channel_suffix}-${tail}.apk"
+          ls "apk-stage/${prefix}-builtin${channel_suffix}-${tail}.apk"
 
       - name: Write APK guide summary
         shell: bash

@@ -25,6 +25,11 @@ on:
           (CMFA-style Build Pre-Release flow). When false, the release is updated in place.
         required: true
         type: boolean
+      draft:
+        description: "KimiNoBox: leave the release a draft, to be published by hand."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -93,7 +98,7 @@ jobs:
           tag_name: ${{ inputs.release_tag }}
           name: ${{ inputs.release_name }}
           prerelease: ${{ inputs.prerelease }}
-          draft: false
+          draft: ${{ inputs.draft }} # KimiNoBox
           target_commitish: ${{ github.sha }}
           overwrite_files: true
           fail_on_unmatched_files: true

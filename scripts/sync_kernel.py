@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Synchronize the selected mihomo branch and update kernel.properties."""
+"""Synchronize the selected mihomo branch and update kernel.properties.
+
+KimiNoBox: the `pinned` channel clones the tag or branch kernel.properties already names
+(external.mihomo.branch) and leaves the file as it is.
+"""
 
 from __future__ import annotations
 
@@ -47,6 +51,14 @@ def update_kernel_properties(path: Path, branch: str, suffix: str = "") -> None:
     print(f"Updated kernel.properties -> repo={REPO_URL} branch={branch} suffix={suffix}")
 
 
+def pinned_branch(path: Path) -> str:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "external.mihomo.branch" and value.strip():
+            return value.strip()
+    raise SystemExit("kernel.properties names no external.mihomo.branch to pin")
+
+
 def sync_repo(project_root: Path, branch: str) -> None:
     mihomo_dir = project_root / "lib/mihomo/mihomo"
     if mihomo_dir.exists():
@@ -67,11 +79,14 @@ def run_tidy(path: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Synchronize the mihomo kernel source")
-    parser.add_argument("channel", choices=("alpha", "Alpha", "meta", "Meta"))
+    parser.add_argument("channel", choices=("alpha", "Alpha", "meta", "Meta", "pinned"))
     args = parser.parse_args()
     project_root = Path(__file__).resolve().parents[1]
-    branch = "Alpha" if args.channel.lower() == "alpha" else "Meta"
-    update_kernel_properties(project_root / "kernel.properties", branch)
+    if args.channel == "pinned":
+        branch = pinned_branch(project_root / "kernel.properties")
+    else:
+        branch = "Alpha" if args.channel.lower() == "alpha" else "Meta"
+        update_kernel_properties(project_root / "kernel.properties", branch)
     sync_repo(project_root, branch)
     run_tidy(project_root / "lib/mihomo/mihomo")
     run_tidy(project_root / "lib/native/go")
