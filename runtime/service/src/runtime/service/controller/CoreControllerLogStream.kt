@@ -35,9 +35,12 @@ import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.IOException
 import java.util.*
-import java.util.concurrent.atomic.AtomicReference
 
-/** Owns the single REST log-stream subscription for one controller endpoint. */
+/**
+ * REST log streams for one controller endpoint. KimiNoBox: each subscriber gets a stream of its own.
+ * The session and the log page share one controller, and with a single stream the later subscriber
+ * took it from the earlier one without telling it, so the log page stopped at every core restart.
+ */
 internal class CoreControllerLogStream(
     private val client: HttpClient,
     private val json: Json,
@@ -46,37 +49,26 @@ internal class CoreControllerLogStream(
     private val probeUrl: () -> String, // KimiNoBox
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val sink = AtomicReference<LogSink?>(null)
-    @Volatile private var job: Job? = null
 
-    @Synchronized
     fun subscribe(observer: LogObserver): LogSubscription {
-        val nextSink = LogSink(observer)
-        sink.set(nextSink)
-        job?.cancel()
-        job = scope.launch {
-            while (isActive && sink.get() === nextSink) {
+        val sink = LogSink(observer)
+        val job = scope.launch {
+            while (isActive && sink.open) {
                 try {
-                    streamOnce(nextSink)
-                    if (sink.get() === nextSink) {
-                        nextSink.observer.onError(IOException("log stream ended"))
-                    }
+                    streamOnce(sink)
+                    if (sink.open) sink.observer.onError(IOException("log stream ended"))
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
-                    if (sink.get() === nextSink) nextSink.observer.onError(error)
+                    if (sink.open) sink.observer.onError(error)
                     Timber.w(error, "log stream failed; retrying")
                 }
                 delay(LOG_STREAM_RETRY_MS)
             }
         }
         return LogSubscription {
-            synchronized(this@CoreControllerLogStream) {
-                if (sink.compareAndSet(nextSink, null)) {
-                    job?.cancel()
-                    job = null
-                }
-            }
+            sink.open = false
+            job.cancel()
         }
     }
 
@@ -84,7 +76,7 @@ internal class CoreControllerLogStream(
         // KimiNoBox: mihomo sends the /logs headers only with the first log line, which can be
         // half a minute away on an idle core. A reachable controller is reported as connected now.
         client.get(probeUrl()) { applyAuth() }
-        if (this.sink.get() !== sink) return
+        if (!sink.open) return
         sink.observer.onConnected()
         client
             .prepareGet(logUrl()) {
@@ -95,10 +87,10 @@ internal class CoreControllerLogStream(
                 }
             }
             .execute { response ->
-                if (this.sink.get() !== sink) return@execute
+                if (!sink.open) return@execute
                 sink.observer.onConnected()
                 val channel = response.bodyAsChannel()
-                while (this.sink.get() === sink && !channel.isClosedForRead) {
+                while (sink.open && !channel.isClosedForRead) {
                     val line = channel.readLine() ?: break
                     if (line.isBlank()) continue
                     val entry = runCatching { json.decodeFromString<RawLogLine>(line) }.getOrNull() ?: continue
@@ -123,7 +115,9 @@ internal class CoreControllerLogStream(
             else -> LogMessage.Level.Unknown
         }
 
-    private data class LogSink(val observer: LogObserver)
+    private class LogSink(val observer: LogObserver) {
+        @Volatile var open = true
+    }
 
     @Serializable private data class RawLogLine(val type: String = "info", val payload: String = "")
 
