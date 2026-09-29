@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
@@ -34,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -277,27 +280,39 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
             )
         }
         if (picking) {
+            // Checked ones are added in the order they were checked, which the numbers show
+            var chosen by remember { mutableStateOf(emptyList<String>()) }
             AlertDialog(
                 onDismissRequest = { picking = false },
                 title = { Text("选择节点源") },
                 text = {
-                    Column {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            "按勾选的顺序加到节点源的最后",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
                         sources.filter { profileId !in it.boundProfileIds }.forEach { source ->
-                            Text(
-                                source.form.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                                        .clickable {
-                                            picking = false
-                                            scope.launch { manager.bind(source.id, profileId) }
-                                        }
-                                        .padding(vertical = 12.dp),
+                            PickRow(
+                                source = source,
+                                order = chosen.indexOf(source.id),
+                                onCheckedChange = { chosen = CheckedOrder.toggle(chosen, source.id, it) },
                             )
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { picking = false }) { Text("取消") } },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            picking = false
+                            val ids = chosen
+                            scope.launch { manager.bind(ids, profileId) }
+                        },
+                        enabled = chosen.isNotEmpty(),
+                    ) { Text(if (chosen.isEmpty()) "添加" else "添加 ${chosen.size} 个") }
+                },
+                dismissButton = { TextButton(onClick = { picking = false }) { Text("取消") } },
             )
         }
     }
@@ -391,6 +406,38 @@ private fun SourceRow(
                     if (source.form.prefix.isEmpty()) TextButton(onClick = onAddPrefix) { Text("加前缀") }
                 }
             }
+        }
+    }
+}
+
+/** A source to pick; [order] is its place among the checked ones, -1 while unchecked. */
+@Composable
+private fun PickRow(source: NodeSource, order: Int, onCheckedChange: (Boolean) -> Unit) {
+    val checked = order >= 0
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onCheckedChange(!checked) },
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Text(source.form.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val info = source.state.info
+            Text(
+                listOfNotNull(
+                    info?.nodeCount?.let { "$it 个节点" },
+                    info?.updatedAt?.let { "更新于 " + NodeSourceFormat.relativeTime(it) },
+                ).joinToString(" · ").ifEmpty { "还没有下载" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (checked) {
+            Text(
+                "${order + 1}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
         }
     }
 }

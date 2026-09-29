@@ -215,9 +215,12 @@ class NodeSourceManager(
             reloader.reapplyActiveProfileIfUsingOverride(source.id)
         }
 
-    suspend fun bind(sourceId: String, profileId: String) =
+    suspend fun bind(sourceId: String, profileId: String) = bind(listOf(sourceId), profileId)
+
+    /** Binds [sourceIds] to the end of [profileId]'s chain in this order, and applies it once. */
+    suspend fun bind(sourceIds: List<String>, profileId: String) =
         withContext(Dispatchers.IO) {
-            bindings.addOverride(profileId, sourceId)
+            sourceIds.forEach { bindings.addOverride(profileId, it) }
             reapplyIfActive(profileId)
         }
 
