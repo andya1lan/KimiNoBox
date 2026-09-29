@@ -86,7 +86,7 @@ class LogViewModel(
     @Volatile
     private var logSubscription: LogSubscription? = null
     private var connectJob: Job? = null
-    @Volatile private var prefilled = false // KimiNoBox
+    private var opening = 0L // KimiNoBox: bumped by start() and stop(), guarded by pendingLock
 
     val levelFilter: StateFlow<LogLevelFilter> = _levelFilter.asStateFlow()
     val connectionState: StateFlow<LogConnectionState> = _connectionState.asStateFlow()
@@ -105,13 +105,15 @@ class LogViewModel(
                 initialValue = emptyList(),
             )
 
-    private val observer =
+    // KimiNoBox: one observer per opening of the page, so a late line of an earlier one is dropped
+    private fun observer(current: Long) =
         object : LogObserver {
             override fun onConnected() {
-                _connectionState.value = LogConnectionState.Live
+                if (isCurrent(current)) _connectionState.value = LogConnectionState.Live
             }
 
             override fun onError(error: Throwable) {
+                if (!isCurrent(current)) return
                 _connectionState.value =
                     if (coreStopped()) LogConnectionState.NotRunning else LogConnectionState.Retrying // KimiNoBox
             }
@@ -125,27 +127,26 @@ class LogViewModel(
                         message = log.message,
                     )
                 synchronized(pendingLock) {
+                    if (current != opening) return
                     if (pendingEntries.size == MAX_ENTRIES) pendingEntries.removeFirst()
                     pendingEntries.addLast(entry)
                 }
             }
         }
 
+    private fun isCurrent(current: Long): Boolean = synchronized(pendingLock) { current == opening }
+
     init {
         viewModelScope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(LOG_BATCH_WINDOW_MS)
-                val batch =
-                    synchronized(pendingLock) {
-                        if (pendingEntries.isEmpty()) {
-                            emptyList()
-                        } else {
-                            pendingEntries.toList().also { pendingEntries.clear() }
+                // KimiNoBox: published under the lock, so start() cannot clear the list in between
+                synchronized(pendingLock) {
+                    if (pendingEntries.isNotEmpty()) {
+                        val batch = pendingEntries.toList().also { pendingEntries.clear() }
+                        _entries.update { entries ->
+                            (batch.asReversed() + entries).take(MAX_ENTRIES)
                         }
-                    }
-                if (batch.isNotEmpty()) {
-                    _entries.update { entries ->
-                        (batch.asReversed() + entries).take(MAX_ENTRIES)
                     }
                 }
             }
@@ -172,11 +173,24 @@ class LogViewModel(
                 LogScreenState(),
             )
 
-    fun connect() {
-        if (logSubscription != null || connectJob?.isActive == true) return
+    /**
+     * KimiNoBox: every opening of the page starts afresh, from core.log and a stream of its own, and
+     * [stop] closes the stream when the page goes. The view model outlives the page, and keeping its
+     * first stream showed one old run for good.
+     */
+    fun start() {
+        stop()
+        val current =
+            synchronized(pendingLock) {
+                pendingEntries.clear()
+                _entries.value = emptyList()
+                opening
+            }
+        _connectionState.value = LogConnectionState.Connecting
+        val observer = observer(current)
         connectJob =
             viewModelScope.launch(Dispatchers.IO) {
-                prefillFromCoreLog() // KimiNoBox
+                prefillFromCoreLog(observer) // KimiNoBox
                 var retryDelay = INITIAL_CONNECT_RETRY_MS
                 var firstAttempt = true
                 while (isActive && logSubscription == null) {
@@ -190,7 +204,16 @@ class LogViewModel(
                         }
                     try {
                         RuntimeAccess.connect(appContext)
-                        logSubscription = RuntimeAccess.core().subscribeLogs(observer)
+                        val subscription = RuntimeAccess.core().subscribeLogs(observer)
+                        // KimiNoBox: a stop() that came meanwhile has to close this one too
+                        val kept =
+                            synchronized(pendingLock) {
+                                (current == opening).also { if (it) logSubscription = subscription }
+                            }
+                        if (!kept) {
+                            subscription.close()
+                            return@launch
+                        }
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Throwable) {
@@ -203,10 +226,20 @@ class LogViewModel(
             }
     }
 
+    // KimiNoBox
+    fun stop() {
+        val subscription =
+            synchronized(pendingLock) {
+                opening++
+                logSubscription.also { logSubscription = null }
+            }
+        connectJob?.cancel()
+        connectJob = null
+        subscription?.close()
+    }
+
     // KimiNoBox: the stream has no history, so start from the lines the core left in core.log
-    private fun prefillFromCoreLog() {
-        if (prefilled) return
-        prefilled = true
+    private fun prefillFromCoreLog(observer: LogObserver) {
         val file = appContext.runtimeHomeDir.resolve(CoreProcess.CORE_LOG)
         CoreLogLines.parse(
             CoreProcess.coreDiagnosticLog(appContext),
@@ -249,10 +282,7 @@ class LogViewModel(
         }
 
     override fun onCleared() {
-        connectJob?.cancel()
-        connectJob = null
-        logSubscription?.close()
-        logSubscription = null
+        stop() // KimiNoBox
     }
 
     private fun LogMessage.Level.passes(filter: LogLevelFilter): Boolean {

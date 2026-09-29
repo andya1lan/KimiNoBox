@@ -179,7 +179,11 @@ fun LogScreen(navigator: Navigator) {
             }
         }
 
-    LaunchedEffect(Unit) { viewModel.connect() }
+    // KimiNoBox: a fresh start on every opening; the stream closes when the page goes
+    DisposableEffect(viewModel) {
+        viewModel.start()
+        onDispose { viewModel.stop() }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
