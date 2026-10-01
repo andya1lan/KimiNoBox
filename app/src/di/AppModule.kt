@@ -30,34 +30,12 @@ import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.GeoXDownloadClient // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.settings.NetworkSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.WifiAutomationViewModel
-import com.github.yumeyucca.yumebox.screen.settings.backup.BackupRepository
-import com.github.yumeyucca.yumebox.screen.settings.backup.BackupRestoreViewModel
-import com.github.yumeyucca.yumebox.screen.settings.backup.BackupStoreAdapter
 import org.koin.android.ext.koin.androidApplication
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appIntegrationModule = module {
-    single {
-        BackupStoreAdapter(
-            appSettings = get(),
-            networkSettings = get(),
-            featureSettings = get(),
-            proxyDisplaySettings = get(),
-            profileLinks = get(),
-            remoteController = get(),
-            proxyFacade = get(),
-            mmkvProvider = get(),
-        )
-    }
-    single {
-        BackupRepository(
-            application = androidApplication(),
-            proxyFacade = get(),
-            storeAdapter = get(),
-        )
-    }
     single { GeoXDownloadClient(get()) } // KimiNoBox
 }
 
@@ -70,7 +48,6 @@ val appViewModelModule = module {
     viewModel { WifiAutomationViewModel(androidApplication(), get(), get()) }
     viewModel { LogViewModel(androidApplication(), get()) } // KimiNoBox
     viewModel { RulesViewModel(androidApplication()) }
-    viewModel { BackupRestoreViewModel(androidApplication(), get()) }
 }
 
 val appModule: List<Module> =
