@@ -82,7 +82,7 @@ internal class VpnSession(service: VpnService) {
     private suspend fun launch(runtime: LoadedRuntime) {
         withContext(Dispatchers.IO) { transport.start(runtime) }
         loaded = runtime
-        awaitReady(runtime)
+        LateGroups.tolerate(context, log) { awaitReady(runtime) } // KimiNoBox: a slow start is not a failed one
     }
 
     private suspend fun awaitReady(runtime: LoadedRuntime) {
