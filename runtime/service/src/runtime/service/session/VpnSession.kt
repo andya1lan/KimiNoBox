@@ -59,7 +59,7 @@ internal class VpnSession(service: VpnService) {
     suspend fun reload(spec: RuntimeSpec) {
         val previous = checkNotNull(loaded) { "runtime not started" }
         log.i(RuntimeLog.Type.Reload, "begin profile=${spec.profileName}")
-        val runtime = compileForReload(spec, previous)
+        val runtime = prepareReload(spec, previous)
         try {
             launch(runtime)
         } catch (error: CancellationException) {
@@ -73,12 +73,17 @@ internal class VpnSession(service: VpnService) {
     }
 
     /**
-     * KimiNoBox: a config that does not compile never stopped the running core, so it is rejected
-     * like one that does not come up, and the previous config keeps serving.
+     * KimiNoBox: like the core's own config reload, a new config is checked before the running
+     * core stops. One that does not compile, or that the core's `--test` rejects, is refused like
+     * one that does not come up, and the previous config keeps serving without a restart.
      */
-    private suspend fun compileForReload(spec: RuntimeSpec, previous: LoadedRuntime): LoadedRuntime =
+    private suspend fun prepareReload(spec: RuntimeSpec, previous: LoadedRuntime): LoadedRuntime =
         try {
-            LoadedRuntime(spec, pipeline.compile(spec).finalYaml)
+            val startedAt = SystemClock.elapsedRealtime()
+            val runtime = LoadedRuntime(spec, pipeline.compile(spec).finalYaml)
+            ReloadPreflight.check(context, runtime.config)
+            log.i(RuntimeLog.Type.Reload, "checked elapsedMs=${elapsedSince(startedAt)}")
+            runtime
         } catch (error: CancellationException) {
             throw error
         } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
