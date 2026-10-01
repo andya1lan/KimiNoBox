@@ -25,6 +25,8 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
+import com.github.yumeyucca.yumebox.runtime.service.session.RejectedReloadNotice
+import com.github.yumeyucca.yumebox.runtime.service.session.ReloadRejectedException
 import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeSpec
 import com.github.yumeyucca.yumebox.runtime.service.util.importedDir
 import com.github.yumeyucca.yumebox.runtime.service.util.sendProfileChanged
@@ -79,13 +81,20 @@ object ProfileVersions {
     /**
      * Runs one start or reload of [spec], then promotes, restores or records the version it used:
      * a [block] that returns reached Running, one that throws failed, a cancelled one proves
-     * nothing either way.
+     * nothing either way. A refused reload is reported in one dialog, which also says whether the
+     * version was restored; a failed start that restored one gets a toast.
      */
     suspend fun <T> activate(context: Context, spec: RuntimeSpec, block: suspend () -> T): T {
         val activation = withContext(Dispatchers.IO) { beginActivation(spec) }
         val result = runCatching { block() }
-        withContext(Dispatchers.IO) {
-            finishActivation(context, activation, outcomeOf(result.exceptionOrNull()))
+        val error = result.exceptionOrNull()
+        val outcome = outcomeOf(error)
+        val restored =
+            withContext(Dispatchers.IO) { finishActivation(context, activation, outcome) } ==
+                VersionStore.Finish.Restored
+        when {
+            error is ReloadRejectedException -> RejectedReloadNotice.show(spec, error, restored)
+            restored -> toastRestored(context, (outcome as? VersionStore.Outcome.Failed)?.error.orEmpty())
         }
         return result.getOrThrow()
     }
@@ -97,19 +106,25 @@ object ProfileVersions {
     }
 
     /** Promotes, restores or records after start()/reload() ended in [outcome]. */
-    private fun finishActivation(context: Context, activation: Activation?, outcome: VersionStore.Outcome) {
-        activation ?: return
+    private fun finishActivation(
+        context: Context,
+        activation: Activation?,
+        outcome: VersionStore.Outcome,
+    ): VersionStore.Finish? {
+        activation ?: return null
         val finish =
             runCatching { store(context).finish(activation, outcome) }
                 .onFailure { Timber.tag(TAG).w(it, "version bookkeeping failed for %s", activation.uuid) }
                 .getOrNull()
         Timber.tag(TAG)
             .i("profile %s version %s: %s -> %s", activation.uuid, activation.sha.take(12), outcome, finish)
-        if (finish == VersionStore.Finish.Restored) {
-            val text = restoredText((outcome as? VersionStore.Outcome.Failed)?.error.orEmpty())
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
-            }
+        return finish
+    }
+
+    private fun toastRestored(context: Context, error: String) {
+        val text = restoredText(error)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
         }
     }
 
