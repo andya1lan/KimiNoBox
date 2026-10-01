@@ -59,7 +59,7 @@ internal class VpnSession(service: VpnService) {
     suspend fun reload(spec: RuntimeSpec) {
         val previous = checkNotNull(loaded) { "runtime not started" }
         log.i(RuntimeLog.Type.Reload, "begin profile=${spec.profileName}")
-        val runtime = LoadedRuntime(spec, pipeline.compile(spec).finalYaml)
+        val runtime = compileForReload(spec, previous)
         try {
             launch(runtime)
         } catch (error: CancellationException) {
@@ -71,6 +71,20 @@ internal class VpnSession(service: VpnService) {
         }
         log.i(RuntimeLog.Type.Reload, "success profile=${spec.profileName}")
     }
+
+    /**
+     * KimiNoBox: a config that does not compile never stopped the running core, so it is rejected
+     * like one that does not come up, and the previous config keeps serving.
+     */
+    private suspend fun compileForReload(spec: RuntimeSpec, previous: LoadedRuntime): LoadedRuntime =
+        try {
+            LoadedRuntime(spec, pipeline.compile(spec).finalYaml)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+            log.e(RuntimeLog.Type.Reload, "rejected before launch; previous config keeps serving", error)
+            throw ReloadRejectedException(previous.spec, error)
+        }
 
     /** Blocking: returns after the child core has exited. */
     fun stop() {
