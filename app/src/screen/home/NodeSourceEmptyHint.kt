@@ -31,14 +31,14 @@ import com.github.yumeyucca.yumebox.data.store.ProfileBindingProvider
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplates
 import com.github.yumeyucca.yumebox.runtime.api.RuntimeOwner
-import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
+import com.github.yumeyucca.yumebox.runtime.api.RuntimePhase
+import com.github.yumeyucca.yumebox.runtime.service.RuntimeCoordinator
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
 import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
@@ -54,19 +54,24 @@ import java.time.Instant
 @Composable
 fun NodeSourceEmptyHint() {
     val context = LocalContext.current.applicationContext
-    val proxyFacade: ProxyFacade = koinInject()
     val bindings: ProfileBindingProvider = koinInject()
     val overrides: OverrideConfigStore = koinInject()
-    LaunchedEffect(proxyFacade) {
-        // Settled: Running in VPN mode with no reload in flight, once per start or reload.
-        combine(proxyFacade.runtimeSnapshot, proxyFacade.isConfigReloading) { snapshot, reloading ->
-                snapshot.running && snapshot.owner == RuntimeOwner.VpnService && !reloading
+    LaunchedEffect(Unit) {
+        // Each start or reload settles in a state of its own generation. A recreated activity
+        // sees that state again, so a load whose check already finished is not checked again.
+        RuntimeCoordinator.state
+            .filter { it.owner == RuntimeOwner.VpnService && it.phase == RuntimePhase.Running && !it.reloading }
+            .distinctUntilChangedBy { it.generation }
+            .filter { it.generation != checkedGeneration }
+            .collectLatest { state ->
+                checkEmptyNodeSources(context, bindings, overrides)
+                checkedGeneration = state.generation
             }
-            .distinctUntilChanged()
-            .filter { it }
-            .collectLatest { checkEmptyNodeSources(context, bindings, overrides) }
     }
 }
+
+/** The runtime state generation whose node sources were last checked, for the whole process. */
+@Volatile private var checkedGeneration = -1L
 
 private suspend fun checkEmptyNodeSources(
     context: Context,
