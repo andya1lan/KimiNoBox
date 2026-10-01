@@ -39,7 +39,6 @@ import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade // KimiNoBox
-import com.github.yumeyucca.yumebox.substore.util.SubStoreDownloadClient
 import org.koin.compose.koinInject
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -54,7 +53,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 fun MetaFeatureScreen(navigator: Navigator) {
     val scrollBehavior = MiuixScrollBehavior()
     val context = LocalContext.current
-    val downloadClient: SubStoreDownloadClient = koinInject()
+    val downloadClient: GeoXDownloadClient = koinInject()
     val proxyFacade: ProxyFacade = koinInject() // KimiNoBox
 
     val showGeoXDownloadSheet = remember { mutableStateOf(false) }
@@ -117,7 +116,7 @@ fun MetaFeatureScreen(navigator: Navigator) {
 private fun GeoXDownloadDialog(
     show: MutableState<Boolean>,
     context: android.content.Context,
-    downloadClient: SubStoreDownloadClient,
+    downloadClient: GeoXDownloadClient,
     vpnRunning: () -> Boolean, // KimiNoBox
 ) {
     val spacing = AppTheme.spacing
@@ -182,7 +181,7 @@ private fun GeoXDownloadDialog(
 
 private fun downloadGeoXFiles(
     context: android.content.Context,
-    downloadClient: SubStoreDownloadClient,
+    downloadClient: GeoXDownloadClient,
     items: List<GeoXItem>,
     vpnRunning: () -> Boolean, // KimiNoBox
 ) {

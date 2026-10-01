@@ -25,7 +25,6 @@ import com.github.yumeyucca.yumebox.common.util.showToastDialog
 import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.core.model.GeoXItem
 import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
-import com.github.yumeyucca.yumebox.substore.util.SubStoreDownloadClient
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +62,7 @@ internal object GeoXUpdate {
 
     fun start(
         context: Context,
-        client: SubStoreDownloadClient,
+        client: GeoXDownloadClient,
         items: List<GeoXItem>,
         vpnRunning: () -> Boolean,
     ) {
@@ -90,7 +89,7 @@ internal object GeoXUpdate {
     private const val MMDB_METADATA_WINDOW = 128 * 1024
 
     suspend fun download(
-        client: SubStoreDownloadClient,
+        client: GeoXDownloadClient,
         runtimeHome: File,
         items: List<GeoXItem>,
     ): Result {

@@ -27,6 +27,7 @@ import com.github.yumeyucca.yumebox.screen.profiles.ProfilesViewModel
 import com.github.yumeyucca.yumebox.screen.rules.RulesViewModel
 import com.github.yumeyucca.yumebox.screen.settings.AccessControlViewModel
 import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
+import com.github.yumeyucca.yumebox.screen.settings.GeoXDownloadClient // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.settings.NetworkSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.RemoteControllerViewModel
 import com.github.yumeyucca.yumebox.screen.settings.WifiAutomationViewModel
@@ -58,6 +59,7 @@ val appIntegrationModule = module {
             storeAdapter = get(),
         )
     }
+    single { GeoXDownloadClient(get()) } // KimiNoBox
 }
 
 val appViewModelModule = module {
