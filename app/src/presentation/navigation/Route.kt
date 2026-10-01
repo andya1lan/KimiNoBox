@@ -102,9 +102,6 @@ sealed interface Route {
     data object Providers : Route
 
     @Serializable
-    data object Feature : Route
-
-    @Serializable
     data object CustomRouting : Route
 
     @Serializable

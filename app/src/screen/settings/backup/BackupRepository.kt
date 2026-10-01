@@ -27,8 +27,6 @@ import com.github.yumeyucca.yumebox.core.util.moeWallpaperFile
 import com.github.yumeyucca.yumebox.runtime.api.Intents
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
 import com.github.yumeyucca.yumebox.runtime.service.util.importedDir
-import com.github.yumeyucca.yumebox.substore.SubStorePaths
-import com.github.yumeyucca.yumebox.substore.SubStoreServiceController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -107,7 +105,6 @@ class BackupRepository internal constructor(
                             "profiles",
                             "active_profile",
                             "overrides",
-                            "substore_data",
                             "moe_wallpaper",
                         ),
                 ),
@@ -131,7 +128,6 @@ class BackupRepository internal constructor(
 
         replaceBackupDirectory(extracted.importedDir, application.importedDir)
         replaceBackupDirectory(extracted.overridesDir, application.filesDir.resolve("overrides"))
-        replaceBackupDirectory(extracted.subStoreDataDir, SubStorePaths.dataDir)
         if (wallpaperFile != null) {
             application.moeWallpaperFile().also { target ->
                 target.parentFile?.mkdirs()
@@ -144,7 +140,6 @@ class BackupRepository internal constructor(
 
     private suspend fun stopRuntimeBeforeRestore() {
         runCatching { proxyFacade.stopProxy() }
-        runCatching { SubStoreServiceController.stopService(application) }
     }
 
     private suspend fun notifyRestored() {
@@ -163,7 +158,6 @@ class BackupRepository internal constructor(
         BackupArchiveManager.BackupFiles(
             importedDir = application.importedDir,
             overridesDir = application.filesDir.resolve("overrides"),
-            subStoreDataDir = SubStorePaths.dataDir,
             moeWallpaperFile = application.moeWallpaperFile(),
         )
 

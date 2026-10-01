@@ -67,7 +67,6 @@ fun RouteContent(route: Route, navigator: Navigator) {
         is Route.NodeSourceEdit -> NodeSourceEditScreen(navigator, route.overrideId, route.bindProfileId) // KimiNoBox
         Route.NewProfileFromSources -> NewProfileFromSourcesScreen(navigator) // KimiNoBox
         Route.Providers -> ProvidersScreen(navigator)
-        Route.Feature -> FeatureScreen(navigator)
         Route.CustomRouting -> CustomRoutingRoute(navigator)
         Route.StringListEditor -> StringListEditorScreen(navigator)
         Route.KeyValueEditor -> KeyValueEditorScreen(navigator)
@@ -76,4 +75,4 @@ fun RouteContent(route: Route, navigator: Navigator) {
 }
 
 val SettingsDetailRootRoutes: Set<Route> =
-    setOf(Route.AppSettings, Route.NetworkSettings, Route.Override, Route.MetaFeature, Route.Feature, Route.About)
+    setOf(Route.AppSettings, Route.NetworkSettings, Route.Override, Route.MetaFeature, Route.About)

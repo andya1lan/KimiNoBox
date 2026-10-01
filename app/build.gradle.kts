@@ -449,7 +449,6 @@ android {
 
     packaging {
         jniLibs {
-            excludes += listOf("lib/**/libjavet*.so")
             useLegacyPackaging = true
         }
         resources {
@@ -597,7 +596,6 @@ dependencies {
     implementation(project(":runtime:api"))
     implementation(project(":runtime:client"))
     implementation(project(":runtime:service"))
-    implementation(project(":feature:substore"))
     implementation(project(":feature:proxy"))
     implementation(project(":feature:override"))
     implementation(project(":feature:editor"))

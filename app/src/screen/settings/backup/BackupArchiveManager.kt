@@ -38,7 +38,6 @@ class BackupArchiveManager(
     data class BackupFiles(
         val importedDir: File,
         val overridesDir: File,
-        val subStoreDataDir: File,
         val moeWallpaperFile: File,
     )
 
@@ -52,9 +51,6 @@ class BackupArchiveManager(
 
         val overridesDir: File
             get() = rootDir.resolve(FILES_DIR).resolve(OVERRIDES_DIR)
-
-        val subStoreDataDir: File
-            get() = rootDir.resolve(FILES_DIR).resolve(SUBSTORE_DATA_DIR)
 
         val moeWallpaperFile: File
             get() = rootDir.resolve(FILES_DIR).resolve(MOE_WALLPAPER_DIR).resolve(WALLPAPER_FILE)
@@ -71,7 +67,6 @@ class BackupArchiveManager(
             zip.writeText(PAYLOAD_FILE, json.encodeToString(BackupPayload.serializer(), payload))
             zip.writeDirectory(files.importedDir, "$FILES_DIR/$IMPORTED_DIR")
             zip.writeDirectory(files.overridesDir, "$FILES_DIR/$OVERRIDES_DIR")
-            zip.writeDirectory(files.subStoreDataDir, "$FILES_DIR/$SUBSTORE_DATA_DIR")
             if (files.moeWallpaperFile.isFile) {
                 zip.writeFile(
                     file = files.moeWallpaperFile,
@@ -154,7 +149,6 @@ class BackupArchiveManager(
         private const val FILES_DIR = "files"
         private const val IMPORTED_DIR = "imported"
         private const val OVERRIDES_DIR = "overrides"
-        private const val SUBSTORE_DATA_DIR = "substore-data"
         private const val MOE_WALLPAPER_DIR = "moe-wallpaper"
         private const val WALLPAPER_FILE = "wallpaper.dat"
     }

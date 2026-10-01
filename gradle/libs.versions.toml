@@ -20,8 +20,6 @@ sketch4 = "4.6.0"
 mlkitBarcodeScanning = "17.3.0"
 reorderable = "3.1.0"
 aboutLibraries = "15.2.0"
-commonsCompress = "1.28.0"
-javetNodeAndroid = "6.0.1"
 mmkv64 = "2.4.0"
 decompose = "3.5.0"
 hiddenApiBypass = "6.1"
@@ -94,8 +92,6 @@ aboutlibraries-compose = { module = "com.mikepenz:aboutlibraries-compose", versi
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version.ref = "hiddenApiBypass" }
 shapes = { module = "io.github.kyant0:shapes", version.ref = "shapes" }
 snake-yaml = { module = "com.github.bmoliveira:snake-yaml", version.ref = "snakeYaml" }
-commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
-javet-node-android = { module = "com.caoccao.javet:javet-node-android", version.ref = "javetNodeAndroid" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }

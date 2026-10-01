@@ -28,15 +28,6 @@
     public static void checkNotNullParameter(...);
 }
 
-# ========================================
-# Javet / Native JS
-# ========================================
--keep class com.caoccao.javet.** { *; }
--keepclassmembers class * {
-    @com.caoccao.javet.annotations.V8Function <methods>;
-    @com.caoccao.javet.annotations.V8Property <methods>;
-}
-
 # JMX classes not available on Android
 -dontwarn java.lang.management.**
 -dontwarn javax.management.**

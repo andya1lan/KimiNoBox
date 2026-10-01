@@ -79,7 +79,6 @@ val appModule: List<Module> =
     coreDiModules +
             listOf(appIntegrationModule, appViewModelModule) +
             listOf(nodeSourceModule) + // KimiNoBox
-            featureSubStoreModules +
             featureProxyModules +
             featureOverrideModules +
             featureMetaModules

@@ -23,33 +23,25 @@
 package com.github.yumeyucca.yumebox.screen.settings
 
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.BuildConfig
-import com.github.yumeyucca.yumebox.WebViewActivity
-import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.*
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
-import com.github.yumeyucca.yumebox.presentation.viewmodel.SettingEvent
-import com.github.yumeyucca.yumebox.presentation.viewmodel.SettingViewModel
-import org.koin.androidx.compose.koinViewModel
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -115,33 +107,15 @@ private fun CircularIcon(
     }
 }
 
-@SuppressLint("LocalContextResourcesRead")
 @Composable
 fun SettingPager(
     mainInnerPadding: PaddingValues,
     @Suppress("UNUSED_PARAMETER") windowLayoutMode: WindowLayoutMode = WindowLayoutMode.Compact,
 ) {
-    val viewModel = koinViewModel<SettingViewModel>()
     val scrollBehavior = MiuixScrollBehavior()
     val rootNavigator = LocalNavigator.current
     val detailNavigator = LocalDetailNavigator.current
-    val context = LocalContext.current
     val versionInfo = "v${BuildConfig.BASE_VERSION}"
-
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is SettingEvent.OpenWebView -> {
-                    runCatching { WebViewActivity.start(context, event.url) }
-                        .getOrElse { throwable ->
-                            context.toast(
-                                YumeTxt.Settings.Error.WebviewFailed.format(throwable.message)
-                            )
-                        }
-                }
-            }
-        }
-    }
 
     // Phone: push on root navigator. Tablet shell: replace right pane.
     // No persistent selected highlight on the list — opens should not leave a tint.
@@ -207,7 +181,7 @@ private fun SettingsMasterList(
             item {
                 Title(YumeTxt.Settings.Section.More)
                 AppCard {
-                    // KimiNoBox: Lab (Sub-Store, built-in panel, remote controller) entry hidden
+                    // KimiNoBox: no Lab entry, its page went with the Sub-Store module
                     ArrowPreference(
                         title = YumeTxt.Settings.More.About,
                         summary = YumeTxt.Settings.More.AboutSummary,

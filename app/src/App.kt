@@ -36,7 +36,6 @@ import com.github.yumeyucca.yumebox.feature.meta.presentation.util.CustomRouting
 import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
 import com.github.yumeyucca.yumebox.screen.settings.MoeWallpaperImporter
-import com.github.yumeyucca.yumebox.substore.util.AppUtil
 import com.tencent.mmkv.MMKV
 import kotlinx.coroutines.*
 import org.koin.android.ext.koin.androidContext
@@ -83,7 +82,7 @@ class App : Application() {
         extractGeoFiles()
         val featureStore: FeatureStore = koinApp.koin.get()
         featureStore.syncAppVersion(BuildConfig.VERSION_CODE)
-        scheduleDeferredStartupTasks(koinApp.koin, featureStore, appSettingsStorage)
+        scheduleDeferredStartupTasks(koinApp.koin, appSettingsStorage)
 
         PlatformIdentifier.getPlatformIdentifier()
     }
@@ -153,7 +152,6 @@ class App : Application() {
 
     private fun scheduleDeferredStartupTasks(
         koin: Koin,
-        featureStore: FeatureStore,
         appSettings: AppSettingsStore,
     ) {
         startupScope.launch {
@@ -163,13 +161,6 @@ class App : Application() {
                 .onFailure { Timber.e(it, "Failed to ensure Moe wallpaper local copy") }
             runCatching { koin.get<AppTrafficStatisticsCollector>() }
             runCatching { koin.get<ProxyFacade>().awaitProxyGroupWarmUp() }
-
-            if (featureStore.isFirstTimeOpen()) {
-                withContext(Dispatchers.IO) {
-                    AppUtil.initFirstOpen()
-                    featureStore.markFirstOpenHandled()
-                }
-            }
         }
     }
 }

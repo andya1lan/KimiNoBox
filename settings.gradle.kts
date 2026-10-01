@@ -96,7 +96,7 @@ gropify {
             isIsolationEnabled = true
         }
     }
-    projects(":core", ":extension") {
+    projects(":core") {
         android { isEnabled = false }
     }
 }
@@ -108,9 +108,7 @@ include(
     ":locale",
     ":ui",
     ":data",
-    ":extension",
     ":app",
-    ":feature:substore",
     ":feature:proxy",
     ":feature:override",
     ":feature:editor",
