@@ -29,7 +29,6 @@ import com.github.yumeyucca.yumebox.screen.settings.AccessControlViewModel
 import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.GeoXDownloadClient // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.settings.NetworkSettingsViewModel
-import com.github.yumeyucca.yumebox.screen.settings.RemoteControllerViewModel
 import com.github.yumeyucca.yumebox.screen.settings.WifiAutomationViewModel
 import com.github.yumeyucca.yumebox.screen.settings.backup.BackupRepository
 import com.github.yumeyucca.yumebox.screen.settings.backup.BackupRestoreViewModel
@@ -67,7 +66,6 @@ val appViewModelModule = module {
     viewModel { HomeViewModel(androidApplication(), get(), get(), get(), get(), get()) }
     viewModel { ProfilesViewModel(androidApplication(), get(), get()) }
     viewModel { NetworkSettingsViewModel(androidApplication(), get(), get()) }
-    viewModel { RemoteControllerViewModel(androidApplication(), get(), get()) }
     viewModel { AccessControlViewModel(androidApplication(), get(), get()) }
     viewModel { WifiAutomationViewModel(androidApplication(), get(), get()) }
     viewModel { LogViewModel(androidApplication(), get()) } // KimiNoBox
