@@ -36,14 +36,19 @@ import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.runtime.api.ProfileUpdateReport
 import com.github.yumeyucca.yumebox.runtime.client.ProfilePatch
 import com.github.yumeyucca.yumebox.runtime.client.ProfilesRepository
+import com.github.yumeyucca.yumebox.runtime.service.RuntimeCoordinator // KimiNoBox
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import timber.log.Timber
 import java.util.*
+import java.util.concurrent.atomic.AtomicLong
 
 class ProfilesViewModel(
     application: Application,
@@ -69,8 +74,41 @@ class ProfilesViewModel(
     private val _downloadProgress = MutableStateFlow<DownloadProgress?>(null)
     val downloadProgress: StateFlow<DownloadProgress?> = _downloadProgress.asStateFlow()
 
+    /** KimiNoBox: numbers each list read, so an older read never overwrites a newer one. */
+    private val readSeq = AtomicLong()
+
     init {
         refreshProfiles()
+        // KimiNoBox: a refused switch puts the previous profile back. The toggles are drawn from
+        // each listed profile's `active`, so the whole list is re-read after every runtime state
+        // change, without the loading state of refreshProfiles(). A refusal can take well under
+        // a second; the state flow may then skip its reloading=true, but never a new generation.
+        viewModelScope.launch {
+            RuntimeCoordinator.state
+                .map { it.generation }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect {
+                    try {
+                        readProfiles()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+                        Timber.w(error, "Profiles not re-read after a runtime change")
+                    }
+                }
+        }
+    }
+
+    /** KimiNoBox: the list and the active profile, written only by the latest read started. */
+    private suspend fun readProfiles() {
+        val seq = readSeq.incrementAndGet()
+        val allProfiles = profilesRepository.queryAllProfiles()
+        val active = profilesRepository.queryActiveProfile()
+        if (seq == readSeq.get()) {
+            _profiles.value = allProfiles
+            _activeProfile.value = active
+        }
     }
 
     // Fault barrier: any refresh failure is surfaced as UI error state (CE rethrown).
@@ -79,11 +117,7 @@ class ProfilesViewModel(
         viewModelScope.launch {
             try {
                 setLoading(true)
-                val allProfiles = profilesRepository.queryAllProfiles()
-                val active = profilesRepository.queryActiveProfile()
-
-                _profiles.value = allProfiles
-                _activeProfile.value = active
+                readProfiles() // KimiNoBox: see readSeq
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 Timber.e(error, "Failed to refresh profiles")
