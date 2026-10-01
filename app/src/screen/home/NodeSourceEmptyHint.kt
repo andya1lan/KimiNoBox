@@ -22,34 +22,31 @@
 
 package com.github.yumeyucca.yumebox.screen.home
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.SystemClock
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import com.github.yumeyucca.yumebox.common.util.ToastDialogBridge
 import com.github.yumeyucca.yumebox.data.store.OverrideConfigStore
 import com.github.yumeyucca.yumebox.data.store.ProfileBindingProvider
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplates
-import com.github.yumeyucca.yumebox.runtime.api.Intents
 import com.github.yumeyucca.yumebox.runtime.api.RuntimeOwner
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
+import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
 import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.compose.koinInject
 import timber.log.Timber
 import java.time.Instant
 
 /**
- * KimiNoBox: after each VPN start or reload (the service's "profile loaded" broadcast), names the
+ * KimiNoBox: after each VPN start or reload (the runtime settling on Running), names the
  * subscription node sources of the running profile that came up with no nodes, once. The core
  * lists groups before providers finish their first download, so a source counts as empty only
  * once the core logged its failed initial load, or after the core's download timeout.
@@ -60,42 +57,31 @@ fun NodeSourceEmptyHint() {
     val proxyFacade: ProxyFacade = koinInject()
     val bindings: ProfileBindingProvider = koinInject()
     val overrides: OverrideConfigStore = koinInject()
-    // The profile of the latest load, with a stamp so every load is checked.
-    var loaded by remember { mutableStateOf<Pair<String, Long>?>(null) }
-
-    DisposableEffect(context) {
-        val receiver =
-            object : BroadcastReceiver() {
-                override fun onReceive(receiverContext: Context?, intent: Intent?) {
-                    val uuid = intent?.getStringExtra(Intents.EXTRA_UUID) ?: return
-                    loaded = uuid to SystemClock.elapsedRealtime()
-                }
+    LaunchedEffect(proxyFacade) {
+        // Settled: Running in VPN mode with no reload in flight, once per start or reload.
+        combine(proxyFacade.runtimeSnapshot, proxyFacade.isConfigReloading) { snapshot, reloading ->
+                snapshot.running && snapshot.owner == RuntimeOwner.VpnService && !reloading
             }
-        ContextCompat.registerReceiver(
-            context,
-            receiver,
-            IntentFilter(Intents.actionProfileLoaded(context.packageName)),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        onDispose { context.unregisterReceiver(receiver) }
+            .distinctUntilChanged()
+            .filter { it }
+            .collectLatest { checkEmptyNodeSources(context, bindings, overrides) }
     }
+}
 
-    LaunchedEffect(loaded) {
-        val profileUuid = loaded?.first ?: return@LaunchedEffect
-        // A start is announced before the app's snapshot reaches Running; a load that never gets
-        // there (the preview core) is not a VPN start.
-        val snapshot =
-            withTimeoutOrNull(RUNNING_WAIT_MS) { proxyFacade.runtimeSnapshot.first { it.running } }
-        if (snapshot?.owner != RuntimeOwner.VpnService) return@LaunchedEffect
-        val empty =
-            withContext(Dispatchers.IO) {
-                runCatching { emptyNodeSources(context, profileUuid, bindings, overrides) }
-                    .onFailure { Timber.w(it, "empty node source check failed") }
-                    .getOrDefault(emptyMap())
-            }
-        // The app-wide dialog host: this composable sits outside every Scaffold.
-        if (empty.isNotEmpty()) ToastDialogBridge.show(message = summaryOf(empty), title = TITLE)
-    }
+private suspend fun checkEmptyNodeSources(
+    context: Context,
+    bindings: ProfileBindingProvider,
+    overrides: OverrideConfigStore,
+) {
+    val profileUuid = ServiceStore().activeProfile?.toString() ?: return
+    val empty =
+        withContext(Dispatchers.IO) {
+            runCatching { emptyNodeSources(context, profileUuid, bindings, overrides) }
+                .onFailure { Timber.w(it, "empty node source check failed") }
+                .getOrDefault(emptyMap())
+        }
+    // The app-wide dialog host: this composable sits outside every Scaffold.
+    if (empty.isNotEmpty()) ToastDialogBridge.show(message = summaryOf(empty), title = TITLE)
 }
 
 /** Empty node sources of the profile, each with the core's reason when it logged one. */
@@ -146,7 +132,6 @@ internal fun summaryOf(empty: Map<String, String?>): String =
 
 private const val TITLE = "节点源没有节点"
 private const val POLL_MS = 2_000L
-private const val RUNNING_WAIT_MS = 15_000L
 
 /** The core's HTTP download timeout is 20 s. */
 private const val WAIT_MS = 25_000L

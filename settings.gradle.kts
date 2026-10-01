@@ -36,13 +36,7 @@ pluginManagement {
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
         maven("https://jitpack.io")
-        // KimiNoBox: FYTxt and FVV come from a copy in the repo; their repository is gone
-        maven(file("gradle/fytxt-repo")) {
-            content { includeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
-        }
-        maven("https://maven.aliyun.com/nexus/content/repositories/releases/") {
-            content { excludeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
-        }
+        maven("https://maven.aliyun.com/nexus/content/repositories/releases/")
     }
 }
 
@@ -53,6 +47,7 @@ buildscript {
         when {
             requested.group.startsWith("tools.jackson") -> useVersion("3.1.5")
             requested.group == "io.netty" -> useVersion("4.1.136.Final")
+            requested.group == "org.bouncycastle" -> useVersion("1.86")
         }
     }
 }
@@ -68,13 +63,7 @@ dependencyResolutionManagement {
 
         maven("https://jitpack.io")
         maven("https://raw.githubusercontent.com/MetaCubeX/maven-backup/main/releases")
-        // KimiNoBox: FYTxt and FVV come from a copy in the repo; their repository is gone
-        maven(file("gradle/fytxt-repo")) {
-            content { includeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
-        }
-        maven("https://maven.aliyun.com/nexus/content/repositories/releases/") {
-            content { excludeGroupByRegex("ren\\.shiror\\.(fyl\\.fytxt|fvv)(\\..+)?") }
-        }
+        maven("https://maven.aliyun.com/nexus/content/repositories/releases/")
     }
 }
 

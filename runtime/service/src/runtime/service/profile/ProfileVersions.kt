@@ -24,13 +24,13 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import com.github.yumeyucca.yumebox.runtime.api.RuntimePhase
-import com.github.yumeyucca.yumebox.runtime.api.RuntimeSnapshot
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
-import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeOperationResult
 import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeSpec
 import com.github.yumeyucca.yumebox.runtime.service.util.importedDir
 import com.github.yumeyucca.yumebox.runtime.service.util.sendProfileChanged
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import timber.log.Timber
@@ -76,21 +76,29 @@ object ProfileVersions {
     /** The version one start()/reload() attempts, read right before the call. */
     data class Activation(val uuid: String, val sha: String, val config: File)
 
-    fun beginActivation(spec: RuntimeSpec): Activation? {
+    /**
+     * Runs one start or reload of [spec], then promotes, restores or records the version it used:
+     * a [block] that returns reached Running, one that throws failed, a cancelled one proves
+     * nothing either way.
+     */
+    suspend fun <T> activate(context: Context, spec: RuntimeSpec, block: suspend () -> T): T {
+        val activation = withContext(Dispatchers.IO) { beginActivation(spec) }
+        val result = runCatching { block() }
+        withContext(Dispatchers.IO) {
+            finishActivation(context, activation, outcomeOf(result.exceptionOrNull()))
+        }
+        return result.getOrThrow()
+    }
+
+    private fun beginActivation(spec: RuntimeSpec): Activation? {
         if (spec.preview) return null
         val config = File(spec.profileDir, ProfileCommit.CONFIG)
         return VersionStore.shaOf(config)?.let { Activation(spec.profileUuid, it, config) }
     }
 
-    /** Promotes, restores or records after start()/reload() returned [result]. */
-    fun finishActivation(
-        context: Context,
-        activation: Activation?,
-        result: RuntimeOperationResult,
-        snapshot: RuntimeSnapshot,
-    ) {
+    /** Promotes, restores or records after start()/reload() ended in [outcome]. */
+    private fun finishActivation(context: Context, activation: Activation?, outcome: VersionStore.Outcome) {
         activation ?: return
-        val outcome = outcomeOf(activation, result, snapshot)
         val finish =
             runCatching { store(context).finish(activation, outcome) }
                 .onFailure { Timber.tag(TAG).w(it, "version bookkeeping failed for %s", activation.uuid) }
@@ -98,7 +106,7 @@ object ProfileVersions {
         Timber.tag(TAG)
             .i("profile %s version %s: %s -> %s", activation.uuid, activation.sha.take(12), outcome, finish)
         if (finish == VersionStore.Finish.Restored) {
-            val text = restoredText(result.error.orEmpty())
+            val text = restoredText((outcome as? VersionStore.Outcome.Failed)?.error.orEmpty())
             Handler(Looper.getMainLooper()).post {
                 Toast.makeText(context.applicationContext, text, Toast.LENGTH_LONG).show()
             }
@@ -130,16 +138,13 @@ object ProfileVersions {
     fun trackedProfiles(context: Context): List<UUID> =
         store(context).tracked().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
 
-    internal fun outcomeOf(
-        activation: Activation,
-        result: RuntimeOperationResult,
-        snapshot: RuntimeSnapshot,
-    ): VersionStore.Outcome =
-        when {
-            !result.success -> VersionStore.Outcome.Failed(result.error ?: "start failed")
-            snapshot.phase == RuntimePhase.Running && snapshot.profileUuid == activation.uuid ->
-                VersionStore.Outcome.Succeeded
-            // runGuarded reports an interrupted start/reload as success: no proof either way.
+    /** [error] is what start()/reload() threw, null when it returned. */
+    internal fun outcomeOf(error: Throwable?): VersionStore.Outcome =
+        when (error) {
+            null -> VersionStore.Outcome.Succeeded
+            is CancellationException -> VersionStore.Outcome.Inconclusive
+            is Exception ->
+                VersionStore.Outcome.Failed(error.message?.takeIf(String::isNotBlank) ?: "start failed")
             else -> VersionStore.Outcome.Inconclusive
         }
 

@@ -32,11 +32,9 @@ import java.util.UUID
  * The two read-only views of 「查看配置」 for any profile: the imported `config.yaml` and the final
  * config its VPN start would hand to the core.
  *
- * [CompiledConfigPipeline.previewCompiledYaml] is not used for the final view: it skips the
- * global UA fragment, the disable-all setting and the VPN run mode. The VPN spec of the profile
- * is compiled instead, through the same [CompiledConfigPipeline.compileDetailed] call as a real
- * start, with only the output path moved to a `cacheDir` file that is deleted afterwards (the
- * native compile does not write it today).
+ * The final view compiles the VPN spec of the profile, so it has the global UA fragment, the
+ * disable-all setting and the VPN run mode, through the same [CompiledConfigPipeline.compile]
+ * call as a real start, which returns the YAML without writing a file.
  */
 class ProfileConfigViews(context: Context) {
     private val context: Context = context.appContextOrSelf
@@ -61,26 +59,14 @@ class ProfileConfigViews(context: Context) {
             Views(raw = raw, final = runCatching { compileFinal(uuid) })
         }
 
-    private suspend fun compileFinal(uuid: UUID): String {
-        val spec = SessionRuntimeSpecFactory(context).createVpnSpecFor(uuid)
-        val output =
-            context.cacheDir
-                .resolve(OUTPUT_DIR)
-                .apply { mkdirs() }
-                .resolve("$uuid-${UUID.randomUUID().toString().take(8)}.yaml")
-        return try {
-            CompiledConfigPipeline(context)
-                .compileDetailed(spec.copy(runtimeConfigPath = output.absolutePath))
-                .finalYaml
-        } finally {
-            output.delete()
-        }
-    }
+    private suspend fun compileFinal(uuid: UUID): String =
+        CompiledConfigPipeline(context)
+            .compile(SessionRuntimeSpecFactory(context).createVpnSpecFor(uuid))
+            .finalYaml
 
     private fun failed(error: Throwable) = Views(Result.failure(error), Result.failure(error))
 
     private companion object {
-        const val OUTPUT_DIR = "config-view"
         const val PROFILE_MISSING = "找不到这个配置"
         const val CONFIG_MISSING = "config.yaml 不存在，请先更新这个配置"
         const val ENCRYPTED = "加密配置不支持查看"

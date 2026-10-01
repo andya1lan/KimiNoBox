@@ -7,29 +7,27 @@
 package com.github.yumeyucca.yumebox.runtime.service.preview
 
 import android.content.Context
+import com.github.yumeyucca.yumebox.core.model.Proxy
 import com.github.yumeyucca.yumebox.core.model.ProxyGroup
 import com.github.yumeyucca.yumebox.core.model.ProxyProviderDetail
 import com.github.yumeyucca.yumebox.core.model.ProxySort
 import com.github.yumeyucca.yumebox.domain.model.ProxyDelayPublishCoalescer
 import com.github.yumeyucca.yumebox.domain.model.ProxyDelayTestProgressCallback
-import com.github.yumeyucca.yumebox.domain.model.ProxyGroupInfo
 import com.github.yumeyucca.yumebox.domain.model.ProxyGroupOverlay
 import com.github.yumeyucca.yumebox.domain.model.membersByGroup
 import com.github.yumeyucca.yumebox.domain.model.runProxyGroupDelayTests
-import com.github.yumeyucca.yumebox.runtime.service.controller.CoreController
-import com.github.yumeyucca.yumebox.runtime.service.core.PreviewCoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
+import com.github.yumeyucca.yumebox.runtime.service.core.PreviewCoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.profile.ImportedDao
 import com.github.yumeyucca.yumebox.runtime.service.session.CompiledConfigPipeline
 import com.github.yumeyucca.yumebox.runtime.service.session.SessionRuntimeSpecFactory
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicLong
 
@@ -68,7 +66,7 @@ class PreviewRuntimeManager(context: Context) {
             if (generation.get() != requestGeneration) return@withLock
             // Startup, the home page, and the node page can request the first snapshot together.
             // Compile under the same transaction as launch/readiness so they reuse one result.
-            val compiled = pipeline.compileDetailed(factory.createPreviewSpec())
+            val compiled = pipeline.compile(factory.createPreviewSpec())
             if (generation.get() != requestGeneration) return@withLock
             // Several UI surfaces ask for the initial node snapshot at once. Keep the launch and
             // first controller read in one transaction: otherwise a second caller can replace a
@@ -78,8 +76,7 @@ class PreviewRuntimeManager(context: Context) {
             }
             if (!process.isAlive() || _state.value.fingerprint != compiled.fingerprint) {
                 delayOverlay.clear()
-                // KimiNoBox: start() now waits for the previous child to exit; keep it off Main
-                withContext(Dispatchers.IO) { process.start(compiled.finalYaml) }
+                process.start(compiled.finalYaml)
             }
             val groups = awaitGroups(requestGeneration)
             if (generation.get() == requestGeneration && process.isAlive()) {
@@ -90,17 +87,14 @@ class PreviewRuntimeManager(context: Context) {
     }
 
     /** Never wait for config compilation or a controller readiness retry on the real-core handoff. */
-    // KimiNoBox: suspend on IO — the handoff now waits (bounded) for the preview child to exit
-    suspend fun stop() = withContext(Dispatchers.IO) {
+    fun stop() {
         generation.incrementAndGet()
         delayOverlay.clear()
         process.stop()
     }
 
-    suspend fun reset() = withContext(Dispatchers.IO) {
-        generation.incrementAndGet()
-        delayOverlay.clear()
-        process.stop()
+    fun reset() {
+        stop()
         _state.value = PreviewNodeState()
     }
 
@@ -109,38 +103,11 @@ class PreviewRuntimeManager(context: Context) {
         runCatching { process.controller().proxyProviderDetails() }.getOrDefault(emptyList())
 
     /** Preview is read-only for selection, but mihomo's delay probes are safe and useful here. */
-    suspend fun healthCheck(
-        group: String,
-        onProgress: ProxyDelayTestProgressCallback? = null,
-    ) {
-        val previewGeneration = generation.get()
-        val snapshot = prepareHealthCheckSnapshot(previewGeneration) ?: return
-        delayPublish.session(
-            flush = { delays -> applyDirectDelays(previewGeneration, delays) },
-        ) {
-            runPreviewDelayTests(
-                previewGeneration = previewGeneration,
-                snapshot = snapshot,
-                groupNames = listOf(group),
-                onProgress = onProgress,
-            )
-        }
-    }
+    suspend fun healthCheck(group: String, onProgress: ProxyDelayTestProgressCallback? = null) =
+        runDelayTests(onProgress) { listOf(group) }
 
-    suspend fun healthCheckAll(onProgress: ProxyDelayTestProgressCallback? = null) {
-        val previewGeneration = generation.get()
-        val snapshot = prepareHealthCheckSnapshot(previewGeneration) ?: return
-        delayPublish.session(
-            flush = { delays -> applyDirectDelays(previewGeneration, delays) },
-        ) {
-            runPreviewDelayTests(
-                previewGeneration = previewGeneration,
-                snapshot = snapshot,
-                groupNames = snapshot.groupInfos.map(ProxyGroupInfo::name),
-                onProgress = onProgress,
-            )
-        }
-    }
+    suspend fun healthCheckAll(onProgress: ProxyDelayTestProgressCallback? = null) =
+        runDelayTests(onProgress) { proxiesByGroup -> proxiesByGroup.keys.toList() }
 
     suspend fun healthCheckProxy(group: String, proxyName: String): Int {
         val previewGeneration = generation.get()
@@ -157,7 +124,7 @@ class PreviewRuntimeManager(context: Context) {
         mutex.withLock {
             if (!isCurrentGeneration(previewGeneration)) return@withLock
             val refreshed =
-                mergeReportedDelays(listOf(process.controller().queryProxyGroupAsync(name, sort))).first()
+                mergeReportedDelays(listOf(process.controller().queryProxyGroup(name, sort))).first()
             if (!isCurrentGeneration(previewGeneration)) return@withLock
             val previous = _state.value
             val merged =
@@ -170,7 +137,7 @@ class PreviewRuntimeManager(context: Context) {
     }
 
     private suspend fun refreshGroups(previewGeneration: Long) {
-        val incoming = process.controller().queryAllProxyGroupsAsync(false)
+        val incoming = process.controller().queryAllProxyGroups(false)
         if (!isCurrentGeneration(previewGeneration)) {
             return
         }
@@ -206,52 +173,31 @@ class PreviewRuntimeManager(context: Context) {
         }.let(delayOverlay::paintProxyGroups)
     }
 
-    private data class PreviewHealthCheckSnapshot(
-        val controller: CoreController,
-        val groupInfos: List<ProxyGroupInfo>,
-        val proxiesByGroup: Map<String, List<com.github.yumeyucca.yumebox.core.model.Proxy>>,
-    )
-
-    private suspend fun prepareHealthCheckSnapshot(previewGeneration: Long): PreviewHealthCheckSnapshot? =
-        mutex.withLock {
-            if (!isCurrentGeneration(previewGeneration)) return@withLock null
-            refreshGroups(previewGeneration)
-            if (!isCurrentGeneration(previewGeneration)) return@withLock null
-            val groups = _state.value.groups
-            PreviewHealthCheckSnapshot(
-                controller = process.controller(),
-                groupInfos =
-                    groups.map { group ->
-                        ProxyGroupInfo(
-                            name = group.name,
-                            type = group.type,
-                            proxies = group.proxies,
-                            now = group.now,
-                            icon = group.icon,
-                            hidden = group.hidden,
-                        )
-                    },
-                proxiesByGroup = groups.associate { group -> group.name to group.proxies },
+    /** Refreshes the groups under the lock, then probes outside it so selection reads stay live. */
+    private suspend fun runDelayTests(
+        onProgress: ProxyDelayTestProgressCallback?,
+        groupNames: (proxiesByGroup: Map<String, List<Proxy>>) -> List<String>,
+    ) {
+        val previewGeneration = generation.get()
+        val (controller, proxiesByGroup) =
+            mutex.withLock {
+                if (!isCurrentGeneration(previewGeneration)) return
+                refreshGroups(previewGeneration)
+                if (!isCurrentGeneration(previewGeneration)) return
+                process.controller() to _state.value.groups.associate { it.name to it.proxies }
+            }
+        delayPublish.session(flush = { delays -> applyDirectDelays(previewGeneration, delays) }) {
+            runProxyGroupDelayTests(
+                groupNames = groupNames(proxiesByGroup),
+                proxiesByGroup = proxiesByGroup,
+                isActive = { isCurrentGeneration(previewGeneration) },
+                measureProxy = { groupName, proxyName -> controller.healthCheckProxy(groupName, proxyName) },
+                measureGroup = { groupName -> controller.healthCheck(groupName) },
+                publish = { delays -> publishDirectDelays(previewGeneration, delays) },
+                onProgress = onProgress,
             )
         }
-
-    private suspend fun runPreviewDelayTests(
-        previewGeneration: Long,
-        snapshot: PreviewHealthCheckSnapshot,
-        groupNames: List<String>,
-        onProgress: ProxyDelayTestProgressCallback?,
-    ): Boolean =
-        runProxyGroupDelayTests(
-            groupNames = groupNames,
-            proxiesByGroup = snapshot.proxiesByGroup,
-            isActive = { isCurrentGeneration(previewGeneration) },
-            measureProxy = { groupName, proxyName ->
-                snapshot.controller.healthCheckProxy(groupName, proxyName)
-            },
-            measureGroup = { groupName -> snapshot.controller.healthCheck(groupName) },
-            publish = { delays -> publishDirectDelays(previewGeneration, delays) },
-            onProgress = onProgress,
-        )
+    }
 
     private suspend fun publishDirectDelays(
         previewGeneration: Long,
@@ -294,21 +240,15 @@ class PreviewRuntimeManager(context: Context) {
 
     private suspend fun awaitGroups(requestGeneration: Long): List<ProxyGroup> =
         withTimeout(CONTROLLER_READY_TIMEOUT_MS) {
-            while (true) {
+            var groups: List<ProxyGroup>? = null
+            while (groups == null) {
                 if (generation.get() != requestGeneration || !process.isAlive()) {
-                    throw kotlinx.coroutines.CancellationException("preview handoff requested")
+                    throw CancellationException("preview handoff requested")
                 }
-                try {
-                    return@withTimeout process.controller().queryAllProxyGroupsAsync(false)
-                } catch (_: Throwable) {
-                    if (generation.get() != requestGeneration || !process.isAlive()) {
-                        throw kotlinx.coroutines.CancellationException("preview handoff requested")
-                    }
-                    delay(CONTROLLER_RETRY_MS)
-                }
+                groups = runCatching { process.controller().queryAllProxyGroups(false) }.getOrNull()
+                if (groups == null) delay(CONTROLLER_RETRY_MS)
             }
-            @Suppress("UNREACHABLE_CODE")
-            error("preview controller retry loop ended unexpectedly")
+            groups
         }
 
     private companion object {

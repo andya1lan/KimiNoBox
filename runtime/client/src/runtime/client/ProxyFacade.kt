@@ -31,6 +31,7 @@ import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
 import com.github.yumeyucca.yumebox.data.store.RemoteControllerStore
 import com.github.yumeyucca.yumebox.domain.model.ProxyDelayTestProgressCallback
 import com.github.yumeyucca.yumebox.domain.model.ProxyGroupInfo
+import com.github.yumeyucca.yumebox.domain.model.toInfo
 import com.github.yumeyucca.yumebox.runtime.api.*
 import com.github.yumeyucca.yumebox.runtime.client.access.RuntimeAccess
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeCoreOps
@@ -188,18 +189,9 @@ class ProxyFacade(
     }
 
     suspend fun awaitProxyGroupWarmUp() {
-        previewWarmupJob?.let { existing ->
-            when {
-                existing.isActive -> {
-                    existing.join()
-                    return
-                }
-
-                existing.isCompleted -> return
-            }
-        }
-        val job = launchPreviewWarmup()
-        previewWarmupJob = job
+        val existing = previewWarmupJob
+        if (existing?.isCompleted == true) return
+        val job = existing?.takeIf { it.isActive } ?: launchPreviewWarmup().also { previewWarmupJob = it }
         job.join()
     }
 
@@ -220,12 +212,7 @@ class ProxyFacade(
     }
 
     suspend fun startProxy(mode: RunMode = networkSettingsStorage.runMode.value) =
-        startProxy(
-            RuntimeStartRequest(
-                owner = session.ownership.ownerForMode(mode),
-                mode = mode,
-            )
-        )
+        startProxy(RuntimeStartRequest(mode = mode))
 
     suspend fun stopProxy(request: RuntimeStopRequest) {
         try {
@@ -235,8 +222,7 @@ class ProxyFacade(
         }
     }
 
-    suspend fun stopProxy(mode: RunMode? = null) =
-        stopProxy(RuntimeStopRequest(targetMode = mode ?: networkSettingsStorage.runMode.value))
+    suspend fun stopProxy(reason: String? = null) = stopProxy(RuntimeStopRequest(reason = reason))
 
     suspend fun selectProxy(group: String, proxyName: String): Boolean =
         if (nodeSession.value.source == NodeDataSource.Active) {
@@ -303,14 +289,11 @@ class ProxyFacade(
     suspend fun refreshCurrentProfile() {
         if (isRemoteControllerActive()) {
             session.setCurrentProfile(null)
-            session.updateProfileReady(null)
             return
         }
         runCatching {
             session.connectBackend()
-            val profile = RuntimeAccess.profile().queryActive()
-            session.setCurrentProfile(profile)
-            session.updateProfileReady(profile)
+            session.setCurrentProfile(RuntimeAccess.profile().queryActive())
         }
             .onFailure { error ->
                 if (error is CancellationException) throw error
@@ -321,13 +304,8 @@ class ProxyFacade(
     suspend fun refreshAll() {
         refreshCurrentProfile()
         refreshProxyGroups()
-        if (session.snapshotValue().phase == RuntimePhase.Running) {
-            queryTrafficNow()
-            queryTrafficTotal()
-        } else {
-            session.setTrafficNow(0L)
-            session.setTrafficTotal(0L)
-        }
+        queryTrafficNow()
+        queryTrafficTotal()
     }
 
     private fun launchPreviewWarmup(): Job = scope.launch {
@@ -339,13 +317,7 @@ class ProxyFacade(
     }
 
     private suspend fun refreshAllSafely() {
-        val snapshot = session.snapshotValue()
-        if (
-            snapshot.phase != RuntimePhase.Running &&
-                snapshot.owner != RuntimeOwner.RemoteController
-        ) {
-            return
-        }
+        if (!session.snapshotValue().servesNodes) return
         runCatching { refreshAll() }
             .onFailure { error ->
                 if (error is CancellationException) throw error
@@ -383,7 +355,7 @@ class ProxyFacade(
             AppVisibilityTracker.isForeground
                 .collect { isForeground ->
                     if (isForeground) {
-                        session.reconcileAndRefresh()
+                        session.reconcile()
                     } else {
                         session.stopTrafficPolling()
                     }
@@ -428,16 +400,12 @@ class ProxyFacade(
                     NodeInputs(profile != null, snapshot, activeGroups, previewState.groups, previewState.ready)
                 }
                 .collect { input ->
-                    val activeAvailable =
-                        input.activeGroups.isNotEmpty() &&
-                            (input.snapshot.phase == RuntimePhase.Running ||
-                                input.snapshot.owner == RuntimeOwner.RemoteController)
-                    val previewGroups = input.previewGroups.map(::toProxyGroupInfo)
+                    val previewGroups = input.previewGroups.map(ProxyGroup::toInfo)
                     when {
-                        activeAvailable ->
-                            publishNodeSession(NodeDataSource.Active, input.activeGroups, available = true)
+                        input.activeGroups.isNotEmpty() && input.snapshot.servesNodes ->
+                            publishNodeSession(NodeDataSource.Active, input.activeGroups)
                         input.previewReady && previewGroups.isNotEmpty() ->
-                            publishNodeSession(NodeDataSource.Preview, previewGroups, available = true)
+                            publishNodeSession(NodeDataSource.Preview, previewGroups)
                         !input.hasProfile && input.snapshot.owner != RuntimeOwner.RemoteController ->
                             _nodeSession.value = NodeSessionState()
                         _nodeSession.value.everReady ->
@@ -448,12 +416,7 @@ class ProxyFacade(
     }
 
     private suspend fun resumePreviewWhenEligible() {
-        if (
-            AppVisibilityTracker.isForeground.value &&
-                !session.snapshotValue().phase.isActiveOrStopping &&
-                !session.isRemoteControllerActive() &&
-                preview.hasActiveProfile()
-        ) {
+        if (AppVisibilityTracker.isForeground.value && shouldUsePreviewRuntime()) {
             preview.ensureRunning()
         }
     }
@@ -478,29 +441,11 @@ class ProxyFacade(
         return details.filter { it.vehicleType != "Compatible" }.associate { it.name to it.nodeNames }
     }
 
-    private fun publishNodeSession(
-        source: NodeDataSource,
-        nodeGroups: List<ProxyGroupInfo>,
-        available: Boolean,
-    ) {
+    /** Callers only publish non-empty groups. */
+    private fun publishNodeSession(source: NodeDataSource, nodeGroups: List<ProxyGroupInfo>) {
         _nodeSession.value =
-            NodeSessionState(
-                source = source,
-                groups = nodeGroups,
-                available = available,
-                everReady = nodeGroups.isNotEmpty() || _nodeSession.value.everReady,
-            )
+            NodeSessionState(source = source, groups = nodeGroups, available = true, everReady = true)
     }
-
-    private fun toProxyGroupInfo(group: ProxyGroup): ProxyGroupInfo =
-        ProxyGroupInfo(
-            name = group.name,
-            type = group.type,
-            proxies = group.proxies,
-            now = group.now.trim(),
-            icon = group.icon,
-            hidden = group.hidden,
-        )
 
     private data class NodeInputs(
         val hasProfile: Boolean,
@@ -515,14 +460,7 @@ class ProxyFacade(
         requests: Map<String, ProxyGroupSyncPriority>,
         isForeground: Boolean,
     ): ProxyGroupSyncPriority {
-        if (
-            !isForeground ||
-            snapshot.phase != RuntimePhase.Running &&
-                snapshot.owner != RuntimeOwner.RemoteController
-        ) {
-            return ProxyGroupSyncPriority.OFF
-        }
+        if (!isForeground || !snapshot.servesNodes) return ProxyGroupSyncPriority.OFF
         return requests.values.maxByOrNull { it.ordinal } ?: ProxyGroupSyncPriority.OFF
     }
-
 }

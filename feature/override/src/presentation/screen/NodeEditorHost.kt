@@ -36,7 +36,7 @@ import com.github.yumeyucca.yumebox.nodesource.SelfNodesForm
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesTemplate
 import com.github.yumeyucca.yumebox.presentation.viewmodel.OverrideConfigViewModel
 import org.koin.compose.koinInject
-import tf.gal.yumebox.locale.YumeTxt
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 
 /**
  * KimiNoBox: the self-nodes page the override list shows in place of itself. Subscription node

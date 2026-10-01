@@ -22,7 +22,7 @@ package com.github.yumeyucca.yumebox.screen.nodesource
 
 import com.github.yumeyucca.yumebox.common.util.ByteFormatter
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceInfo
-import tf.gal.yumebox.locale.YumeTxt
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId

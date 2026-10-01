@@ -20,12 +20,10 @@
 
 package com.github.yumeyucca.yumebox.runtime.service.profile
 
-import com.github.yumeyucca.yumebox.runtime.api.RuntimePhase
-import com.github.yumeyucca.yumebox.runtime.api.RuntimeSnapshot
 import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileVersions.Status
 import com.github.yumeyucca.yumebox.runtime.service.profile.VersionStore.Finish
 import com.github.yumeyucca.yumebox.runtime.service.profile.VersionStore.Outcome
-import com.github.yumeyucca.yumebox.runtime.service.session.RuntimeOperationResult
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -169,38 +167,13 @@ class ProfileVersionsTest {
     fun interruptedStartsProveNothing() {
         commit(V1)
         val activation = begin()
-        val interrupted =
-            ProfileVersions.outcomeOf(
-                activation,
-                RuntimeOperationResult(success = true),
-                RuntimeSnapshot(phase = RuntimePhase.Idle),
-            )
+        val interrupted = ProfileVersions.outcomeOf(CancellationException("stop requested"))
         assertEquals(Outcome.Inconclusive, interrupted)
         assertEquals(Finish.Ignored, store.finish(activation, interrupted))
 
-        val otherProfile =
-            ProfileVersions.outcomeOf(
-                activation,
-                RuntimeOperationResult(success = true),
-                RuntimeSnapshot(phase = RuntimePhase.Running, profileUuid = "another"),
-            )
-        assertEquals(Outcome.Inconclusive, otherProfile)
-
-        val running =
-            ProfileVersions.outcomeOf(
-                activation,
-                RuntimeOperationResult(success = true),
-                RuntimeSnapshot(phase = RuntimePhase.Running, profileUuid = UUID),
-            )
-        assertEquals(Outcome.Succeeded, running)
-        assertEquals(
-            Outcome.Failed("x"),
-            ProfileVersions.outcomeOf(
-                activation,
-                RuntimeOperationResult(success = false, error = "x"),
-                RuntimeSnapshot(phase = RuntimePhase.Running, profileUuid = UUID),
-            ),
-        )
+        assertEquals(Outcome.Succeeded, ProfileVersions.outcomeOf(null))
+        assertEquals(Outcome.Failed("x"), ProfileVersions.outcomeOf(IllegalStateException("x")))
+        assertEquals(Outcome.Failed("start failed"), ProfileVersions.outcomeOf(IllegalStateException()))
     }
 
     @Test
