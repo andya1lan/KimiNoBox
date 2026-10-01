@@ -45,6 +45,7 @@ import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.core.RootDaemonProbe
 import com.github.yumeyucca.yumebox.runtime.service.core.RootDaemonState
 import com.github.yumeyucca.yumebox.runtime.service.log.RuntimeLog
+import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileVersions
 import com.github.yumeyucca.yumebox.runtime.service.session.ConnectionTracker
 import com.github.yumeyucca.yumebox.runtime.service.session.ReloadRejectedException
 import com.github.yumeyucca.yumebox.runtime.service.session.RootRuntime
@@ -321,7 +322,7 @@ object RuntimeCoordinator : RuntimeControl {
         val service = vpnService ?: awaitVpnService()
         activeVpn = service
         val spec = withContext(Dispatchers.IO) { SessionRuntimeSpecFactory(context).createVpnSpec() }
-        service.session.start(spec)
+        ProfileVersions.activate(context, spec) { service.session.start(spec) } // KimiNoBox: B5
         StatusProvider.currentProfile = spec.profileName
     }
 
@@ -383,7 +384,7 @@ object RuntimeCoordinator : RuntimeControl {
         try {
             val spec =
                 withContext(Dispatchers.IO) { SessionRuntimeSpecFactory(context).createVpnSpec() }
-            service.session.reload(spec)
+            ProfileVersions.activate(context, spec) { service.session.reload(spec) } // KimiNoBox: B5
             StatusProvider.currentProfile = spec.profileName
             publish(current.copy(reloading = false, lastError = null))
         } catch (error: ReloadRejectedException) {
