@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/hub"
 	"github.com/metacubex/mihomo/hub/executor"
@@ -23,6 +24,9 @@ func run(opts options) {
 	// latched for the next checkpoint instead of skipping teardown.
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	if opts.mode == "vpn" {
+		flushDNSOnNetworkChange()
+	}
 
 	rawConfig, tunFd, channelFd := readStartup(opts)
 	if channelFd >= 0 {
@@ -70,6 +74,20 @@ func run(opts options) {
 	// Unwinds listeners (including root tun ip rules) and the fake-ip pool, each self-guarding.
 	// The VpnService child also arrives here through SIGTERM so selector state can be persisted.
 	executor.Shutdown()
+}
+
+// flushDNSOnNetworkChange (KimiNoBox): the app sends SIGUSR1 when the device's network changes.
+// Answers cached on the old network can be unreachable from the new one, and the pooled DNS
+// connections were opened over it, so both go, as in CMFA's notifyDnsChanged.
+func flushDNSOnNetworkChange() {
+	changes := make(chan os.Signal, 1)
+	signal.Notify(changes, syscall.SIGUSR1)
+	go func() {
+		for range changes {
+			resolver.ClearCache()
+			resolver.ResetConnection()
+		}
+	}()
 }
 
 // stopped reports a latched stop without blocking: blocking syscalls restart after a signal

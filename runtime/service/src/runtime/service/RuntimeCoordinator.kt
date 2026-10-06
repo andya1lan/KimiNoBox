@@ -47,6 +47,7 @@ import com.github.yumeyucca.yumebox.runtime.service.core.RootDaemonState
 import com.github.yumeyucca.yumebox.runtime.service.log.RuntimeLog
 import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileVersions
 import com.github.yumeyucca.yumebox.runtime.service.session.ConnectionTracker
+import com.github.yumeyucca.yumebox.runtime.service.session.NetworkChangeWatcher
 import com.github.yumeyucca.yumebox.runtime.service.session.ReloadRejectedException
 import com.github.yumeyucca.yumebox.runtime.service.session.RootRuntime
 import com.github.yumeyucca.yumebox.runtime.service.session.SessionRuntimeSpecFactory
@@ -110,6 +111,10 @@ object RuntimeCoordinator : RuntimeControl {
     /** elapsedRealtime right before the running owner last read its spec. */
     @Volatile private var specReadAt = 0L
     private val connectionTracker by lazy { ConnectionTracker(context, scope) }
+    // KimiNoBox: a network change leaves the VPN core with DNS answers from the old network
+    private val networkWatcher by lazy {
+        NetworkChangeWatcher(context) { scope.launch { runOp { flushVpnDnsLocked() } } }
+    }
     private val publicState = _state.asStateFlow()
 
     /** First access reattaches a surviving root daemon or restores the last failure. */
@@ -420,6 +425,16 @@ object RuntimeCoordinator : RuntimeControl {
         connectionTracker.start()
         watchJob?.cancel()
         watchJob = if (owner == RuntimeOwner.VpnService) watchVpnCore() else null
+        if (owner == RuntimeOwner.VpnService) networkWatcher.start() // KimiNoBox
+    }
+
+    /** KimiNoBox: under the lock, so a core that a reload is still launching never gets it. */
+    private fun flushVpnDnsLocked() {
+        val current = _state.value
+        if (current.owner != RuntimeOwner.VpnService || current.phase != RuntimePhase.Running) return
+        CoreProcess.notifyNetworkChanged()
+        RuntimeLog.writer(context, RuntimeLog.Source.LocalTun)
+            .i(RuntimeLog.Type.Transport, "network changed: core DNS cache flushed")
     }
 
     /** The VPN child has no other exit signal; a dead pid turns the session into Failed. */
@@ -454,6 +469,7 @@ object RuntimeCoordinator : RuntimeControl {
         watchJob?.cancel()
         watchJob = null
         connectionTracker.stop()
+        networkWatcher.stop() // KimiNoBox
         when (owner) {
             RuntimeOwner.VpnService -> stopVpnLocked()
             RuntimeOwner.RootDaemon -> {

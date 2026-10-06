@@ -29,6 +29,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.system.Os
+import android.system.OsConstants
 import com.github.yumeyucca.yumebox.core.bridge.Channel
 import com.github.yumeyucca.yumebox.core.bridge.NativeProcess
 import com.github.yumeyucca.yumebox.core.model.ProxyProviderDetail // KimiNoBox
@@ -498,6 +499,16 @@ class CoreProcess(private val context: Context) {
                 if (running === child) running = null
             } else {
                 Timber.tag(TAG).w("VPN core %d still alive after SIGKILL", child.pid)
+            }
+        }
+
+        /**
+         * KimiNoBox: SIGUSR1 makes the VPN child drop its DNS cache and DNS connections (run.go).
+         * It kills a child that has not installed its handler yet, so send it to a running core only.
+         */
+        fun notifyNetworkChanged() {
+            withLifecycleLock {
+                running?.let { child -> runCatching { Os.kill(child.pid, OsConstants.SIGUSR1) } }
             }
         }
 
