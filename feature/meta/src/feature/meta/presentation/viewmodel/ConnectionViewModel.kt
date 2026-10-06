@@ -37,7 +37,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonPrimitive
 import timber.log.Timber
 
 enum class ConnectionSort {
@@ -195,8 +194,7 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
                 val query = currentState.searchQuery.lowercase()
                 connections.filter { conn ->
                     val host = connectionDisplayTarget(conn).lowercase()
-                    val process =
-                        conn.metadata["process"]?.jsonPrimitive?.content?.lowercase() ?: ""
+                    val process = conn.metadata.process.lowercase()
                     val chains = conn.chains.joinToString(" ").lowercase()
                     val rule = conn.rule.lowercase()
 
@@ -228,11 +226,11 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
 
 private fun connectionDisplayTarget(connection: ConnectionInfo): String {
     val metadata = connection.metadata
-    val host = metadata["host"]?.jsonPrimitive?.content.orEmpty()
-    val destinationIp = metadata["destinationIP"]?.jsonPrimitive?.content.orEmpty()
-    val destinationPort = metadata["destinationPort"]?.jsonPrimitive?.content.orEmpty()
-    val sourceIp = metadata["sourceIP"]?.jsonPrimitive?.content.orEmpty()
-    val sourcePort = metadata["sourcePort"]?.jsonPrimitive?.content.orEmpty()
+    val host = metadata.host
+    val destinationIp = metadata.destinationIP
+    val destinationPort = metadata.destinationPort
+    val sourceIp = metadata.sourceIP
+    val sourcePort = metadata.sourcePort
     return when {
         host.isNotBlank() && destinationPort.isNotBlank() -> "$host:$destinationPort"
         host.isNotBlank() -> host

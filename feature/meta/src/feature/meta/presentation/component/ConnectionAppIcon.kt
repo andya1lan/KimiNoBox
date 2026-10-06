@@ -43,12 +43,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.takeOrElse
 import androidx.core.graphics.drawable.toBitmap
+import com.github.yumeyucca.yumebox.core.model.ConnectionMetadata
 import com.github.yumeyucca.yumebox.data.controller.AppIdentityResolver
 import com.github.yumeyucca.yumebox.presentation.theme.AppColors
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -56,7 +56,7 @@ private const val CONNECTION_APP_ICON_BITMAP_SIZE = 80
 
 @Composable
 internal fun ConnectionLeadingIcon(
-    metadata: JsonObject,
+    metadata: ConnectionMetadata,
     network: String,
     modifier: Modifier = Modifier,
     size: Dp = Dp.Unspecified,

@@ -39,7 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
-import kotlinx.serialization.json.jsonPrimitive
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -58,31 +57,13 @@ fun ConnectionCard(
     val backgroundColor = MiuixTheme.colorScheme.background
     val interactionSource = remember { MutableInteractionSource() }
 
-    val host =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["host"]?.jsonPrimitive?.content ?: ""
-        }
-    val network =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["network"]?.jsonPrimitive?.content ?: "TCP"
-        }
-    val destinationPort =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["destinationPort"]?.jsonPrimitive?.content ?: ""
-        }
-    val sourceIP =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["sourceIP"]?.jsonPrimitive?.content ?: ""
-        }
-    val sourcePort =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["sourcePort"]?.jsonPrimitive?.content ?: ""
-        }
-
-    val destinationIp =
-        remember(connectionInfo.metadata) {
-            connectionInfo.metadata["destinationIP"]?.jsonPrimitive?.content ?: ""
-        }
+    val metadata = connectionInfo.metadata
+    val host = metadata.host
+    val network = metadata.network.ifEmpty { "TCP" }
+    val destinationPort = metadata.destinationPort
+    val sourceIP = metadata.sourceIP
+    val sourcePort = metadata.sourcePort
+    val destinationIp = metadata.destinationIP
 
     val displayHost =
         remember(host, destinationIp, destinationPort, sourceIP, sourcePort) {

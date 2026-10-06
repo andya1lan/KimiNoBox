@@ -25,10 +25,7 @@ package com.github.yumeyucca.yumebox.data.controller
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import com.github.yumeyucca.yumebox.core.model.ConnectionMetadata
 import java.util.concurrent.ConcurrentHashMap
 
 data class AppIdentity(
@@ -47,17 +44,12 @@ class AppIdentityResolver(context: Context) {
     @Volatile
     private var installedAppsCache: List<InstalledAppIdentity>? = null
 
-    fun resolve(metadata: JsonObject): AppIdentity {
-        val explicitPackageName =
-            metadata["packageName"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-        val processName = metadata["process"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-        val uid = metadata["uid"]?.jsonPrimitive?.intOrNull
-        return resolve(
-            explicitPackageName = explicitPackageName,
-            processName = processName,
-            uid = uid,
+    fun resolve(metadata: ConnectionMetadata): AppIdentity =
+        resolve(
+            explicitPackageName = metadata.packageName.trim(),
+            processName = metadata.process.trim(),
+            uid = metadata.uid,
         )
-    }
 
     fun resolve(explicitPackageName: String, processName: String, uid: Int?): AppIdentity {
         val cacheKey = buildString {

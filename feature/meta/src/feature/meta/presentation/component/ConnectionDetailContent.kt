@@ -39,11 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.common.util.formatBytes
 import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
+import com.github.yumeyucca.yumebox.core.model.ConnectionMetadata
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.component.Title
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
@@ -308,7 +307,7 @@ private fun ChainNode(name: String, isActive: Boolean) {
 }
 
 internal data class ConnectionDetailState(
-    val metadata: JsonObject,
+    val metadata: ConnectionMetadata,
     val displayHost: String,
     val network: String,
     val process: String,
@@ -318,13 +317,13 @@ internal data class ConnectionDetailState(
 )
 
 internal fun ConnectionInfo.toDetailState(): ConnectionDetailState {
-    val host = metadata.stringOrEmpty("host")
-    val network = metadata.stringOrEmpty("network").ifEmpty { "TCP" }
-    val process = metadata.stringOrEmpty("process")
-    val destinationPort = metadata.stringOrEmpty("destinationPort")
-    val sourceIP = metadata.stringOrEmpty("sourceIP")
-    val sourcePort = metadata.stringOrEmpty("sourcePort")
-    val destinationIP = metadata.stringOrEmpty("destinationIP")
+    val host = metadata.host
+    val network = metadata.network.ifEmpty { "TCP" }
+    val process = metadata.process
+    val destinationPort = metadata.destinationPort
+    val sourceIP = metadata.sourceIP
+    val sourcePort = metadata.sourcePort
+    val destinationIP = metadata.destinationIP
 
     val displayHost =
         when {
@@ -363,6 +362,3 @@ private fun calculateDuration(start: String): String {
         "00:00:00"
     }
 }
-
-private fun JsonObject.stringOrEmpty(key: String): String =
-    get(key)?.jsonPrimitive?.content.orEmpty()

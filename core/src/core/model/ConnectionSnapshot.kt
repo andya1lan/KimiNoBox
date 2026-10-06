@@ -27,7 +27,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class ConnectionSnapshot(
@@ -61,7 +60,7 @@ internal object NullAsEmptyConnectionsSerializer : KSerializer<List<ConnectionIn
 @Serializable
 data class ConnectionInfo(
     val id: String = "",
-    val metadata: JsonObject = JsonObject(emptyMap()),
+    val metadata: ConnectionMetadata = ConnectionMetadata(),
     @SerialName("upload") val upload: Long = 0L,
     @SerialName("download") val download: Long = 0L,
     val start: String = "",
@@ -69,4 +68,22 @@ data class ConnectionInfo(
     val providerChains: List<String> = emptyList(),
     val rule: String = "",
     val rulePayload: String = "",
+)
+
+/**
+ * KimiNoBox: only the metadata fields the app reads. mihomo sends about 25, and keeping them all as
+ * a JsonObject cost about 4.7 KB per connection: with several thousand connections the Connections
+ * page held a few snapshots at once and ran out of heap.
+ */
+@Serializable
+data class ConnectionMetadata(
+    val network: String = "",
+    val sourceIP: String = "",
+    val sourcePort: String = "",
+    val destinationIP: String = "",
+    val destinationPort: String = "",
+    val host: String = "",
+    val process: String = "",
+    val uid: Int? = null,
+    val packageName: String = "",
 )
