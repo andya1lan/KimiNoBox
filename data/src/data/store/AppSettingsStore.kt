@@ -22,6 +22,7 @@ package com.github.yumeyucca.yumebox.data.store
 
 import com.github.yumeyucca.yumebox.data.model.AppColorTheme
 import com.github.yumeyucca.yumebox.data.model.AppLanguage
+import com.github.yumeyucca.yumebox.data.model.DelayTestUrl // KimiNoBox
 import com.github.yumeyucca.yumebox.data.model.ThemeMode
 import com.tencent.mmkv.MMKV
 
@@ -56,6 +57,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val predictiveBackMaxProgress by floatFlow(50.0f)
     val customUserAgent by strFlow("")
     val editorWordWrap by boolFlow(false) // KimiNoBox: soft wrap in every code editor
+    val delayTestUrl by strFlow(DelayTestUrl.DEFAULT) // KimiNoBox: what the app's delay tests fetch
 
     init {
         migrateLegacyHomeKeys()

@@ -281,6 +281,7 @@ private fun AppNetworkSettingsSection(viewModel: AppSettingsViewModel) {
             customUserAgent = section.customUserAgent,
             onConfirm = viewModel::applyCustomUserAgent,
         )
+        DelayTestUrlPreferenceItem() // KimiNoBox
     }
 }
 

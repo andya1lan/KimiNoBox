@@ -26,6 +26,8 @@ import com.github.yumeyucca.yumebox.core.bridge.UnixSocketFactory
 import com.github.yumeyucca.yumebox.core.model.*
 import com.github.yumeyucca.yumebox.core.util.encodeTrafficValue
 import com.github.yumeyucca.yumebox.data.model.RemoteBackend
+import com.github.yumeyucca.yumebox.data.store.AppSettingsStore // KimiNoBox
+import com.github.yumeyucca.yumebox.data.store.MMKVProvider // KimiNoBox
 import com.github.yumeyucca.yumebox.runtime.api.CoreApi
 import com.github.yumeyucca.yumebox.runtime.api.LogObserver
 import com.github.yumeyucca.yumebox.runtime.api.LogSubscription
@@ -642,11 +644,14 @@ class CoreController(
         const val PROVIDER_SNAPSHOT_CACHE_NS = 5_000_000_000L
         const val LOCAL_BASE_URL = "http://localhost"
 
-        val delayQuery =
-            mapOf(
-                "url" to "https://www.gstatic.com/generate_204",
-                "timeout" to "5000",
-            )
+        // KimiNoBox: the URL chosen in 应用设置 → 网络, read again for every test
+        private val appSettings by lazy { AppSettingsStore(MMKVProvider().getMMKV("settings")) }
+        val delayQuery: Map<String, String>
+            get() =
+                mapOf(
+                    "url" to appSettings.delayTestUrl.value,
+                    "timeout" to "5000",
+                )
         val LOG_QUERY = mapOf("level" to "debug")
         val CONNECTIONS_QUERY = mapOf("interval" to "1000")
     }
