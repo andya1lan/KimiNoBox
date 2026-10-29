@@ -303,7 +303,9 @@ internal fun ProfileSettingsDialog(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(spacing.space16),
                         ) {
-                            AppCard(applyHorizontalPadding = false) {
+                            // KimiNoBox: custom routing is hidden; the switch only shows so a profile
+                            // bound to it by an earlier release can be turned off
+                            if (customRoutingSelected) AppCard(applyHorizontalPadding = false) {
                                 Column {
                                     SwitchPreference(
                                         title = YumeTxt.ProfilesPage.SettingsDialog.CustomRouting,

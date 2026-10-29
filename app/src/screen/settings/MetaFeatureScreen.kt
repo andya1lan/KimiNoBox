@@ -90,10 +90,7 @@ fun MetaFeatureScreen(navigator: Navigator) {
                         title = YumeTxt.TrafficStatistics.Title,
                         onClick = { navigator.push(Route.TrafficStatistics) },
                     )
-                    ArrowPreference(
-                        title = YumeTxt.MetaFeature.CustomRouting.Title,
-                        onClick = { navigator.push(Route.CustomRouting) },
-                    )
+                    // KimiNoBox: custom routing hidden; routing comes from the profile and its overrides
                     ArrowPreference(
                         title = YumeTxt.MetaFeature.GeoX.OnlineUpdateTitle,
                         onClick = { showGeoXDownloadSheet.value = true },
