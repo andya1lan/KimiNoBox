@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze
 import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze.chromeEffect
+import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -47,7 +48,10 @@ private fun Modifier.topBarHazeEffect(state: HazeState?, style: HazeBlurStyle?):
     chromeEffect(
         state = state,
         style = style,
-        blurRadius = UiDp.dp20,
+        blurRadius = YumeHaze.GlassBlurRadius, // KimiNoBox
+        // KimiNoBox: an iOS-style scroll edge — full glass under the status bar, fading out
+        // towards the bar's lower edge instead of ending in a hard line
+        progressive = HazeProgressive.verticalGradient(startIntensity = 1f, endIntensity = 0f),
         noiseFactor = YumeHaze.ChromeNoiseFactor,
     )
 

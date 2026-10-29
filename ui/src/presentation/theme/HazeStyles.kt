@@ -26,6 +26,9 @@ package com.github.yumeyucca.yumebox.presentation.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
@@ -40,10 +43,26 @@ object YumeHaze {
     const val ChromeNoiseFactor: Float = 0.06f
     private const val FallbackAlpha: Float = 0.92f
 
+    // KimiNoBox: the top bar's iOS-style glass: a strong blur, boosted saturation (iOS vibrancy)
+    // and a light tint, so content scrolling underneath shows through in colour. TopAppBar fades
+    // it out towards its lower edge; the floating bottom bar is haze-glass (see BottomBar).
+    val GlassBlurRadius: Dp = UiDp.dp28
+    private const val GlassLightTintAlpha: Float = 0.68f
+    private const val GlassDarkTintAlpha: Float = 0.6f
+    private val GlassSaturation: ColorFilter =
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.8f) })
+
     @Composable
     fun topBarStyle(surface: Color): HazeBlurStyle {
-        val material = HazeMaterials.thin(containerColor = surface)
-        return material.then {
+        val tintAlpha = if (surface.luminance() < 0.5f) GlassDarkTintAlpha else GlassLightTintAlpha
+        return HazeBlurStyle {
+            backgroundColor(surface)
+            colorEffects(
+                listOf(
+                    HazeColorEffect.colorFilter(GlassSaturation),
+                    HazeColorEffect.tint(surface.copy(alpha = tintAlpha)),
+                )
+            )
             noiseFactor(ChromeNoiseFactor)
             fallbackColorEffect(HazeColorEffect.tint(surface.copy(alpha = FallbackAlpha)))
         }
