@@ -50,7 +50,7 @@ internal fun MoeHomeCopyBlock(
             fontSize = MoeUi.Quote.textSize,
             lineHeight = MoeUi.Quote.lineHeight,
             softWrap = true,
-            maxLines = 2,
+            maxLines = 3, // KimiNoBox: the default quote takes three lines on a phone
             overflow = TextOverflow.Clip,
         )
         launchContent?.let { content ->

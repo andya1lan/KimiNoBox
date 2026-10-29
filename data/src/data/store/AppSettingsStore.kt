@@ -49,7 +49,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val moeWallpaperZoom by floatFlow(1.0f)
     val moeWallpaperBiasX by floatFlow(0.0f)
     val moeWallpaperBiasY by floatFlow(0.0f)
-    val moeHomeQuote by strFlow("さよなら君の声 忘れたりしない ずっと")
+    val moeHomeQuote by strFlow(DEFAULT_HOME_QUOTE) // KimiNoBox
     val moeSidebarExpanded by boolFlow(true)
     val splitLeftRatio by floatFlow(0.42f)
     val pageScale by floatFlow(1.0f)
@@ -61,6 +61,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
 
     init {
         migrateLegacyHomeKeys()
+        dropShippedHomeQuote() // KimiNoBox
         resetHomePreviewGuideForWallpaperUpdate()
         if (!mmkv.containsKey("useSystemWallpaper") &&
             mmkv.decodeString("moeWallpaperUri").orEmpty().isNotBlank()
@@ -105,5 +106,23 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
         moveFloat("acgWallpaperBiasX", "moeWallpaperBiasX")
         moveFloat("acgWallpaperBiasY", "moeWallpaperBiasY")
         moveBool("acgSidebarExpanded", "moeSidebarExpanded")
+    }
+
+    /**
+     * KimiNoBox: a stored quote equal to one an earlier release shipped as the default is not the
+     * user's own text, so it gives way to [DEFAULT_HOME_QUOTE].
+     */
+    private fun dropShippedHomeQuote() {
+        if (mmkv.decodeString("moeHomeQuote") in SHIPPED_HOME_QUOTES) {
+            mmkv.removeValueForKey("moeHomeQuote")
+        }
+    }
+
+    companion object {
+        /** KimiNoBox: the repository description. */
+        const val DEFAULT_HOME_QUOTE = "お前が世界のどこにいても俺が必ず、もう一度逢いに行くって。"
+
+        // The YumeBox defaults that KimiNoBox 0.6.5 and 0.6.6 shipped.
+        private val SHIPPED_HOME_QUOTES = setOf("君の隣、感じちゃうの", "さよなら君の声 忘れたりしない ずっと")
     }
 }
