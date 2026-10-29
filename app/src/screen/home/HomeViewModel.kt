@@ -35,7 +35,6 @@ import com.github.yumeyucca.yumebox.data.network.IpMonitoringState
 import com.github.yumeyucca.yumebox.data.network.NetworkInfoService
 import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
 import com.github.yumeyucca.yumebox.domain.model.TrafficData
-import com.github.yumeyucca.yumebox.domain.model.primaryGroup // KimiNoBox
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.runtime.api.RuntimeOwner
 import com.github.yumeyucca.yumebox.runtime.api.RuntimePhase
@@ -162,16 +161,24 @@ class HomeViewModel(
     val selectedServerName: StateFlow<String?> =
         mainProxyNode.map { it?.name }.stateInWhileSubscribed(viewModelScope, null)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val selectedServerPing: StateFlow<Int?> =
         mainProxyNode
-            .map { node -> node?.delay?.takeIf { delay -> delay != 0 } } // KimiNoBox: keep timeouts
+            .flatMapLatest { node ->
+                if (node == null) {
+                    flowOf(null)
+                } else {
+                    proxyFacade.proxyDelayFlow(node.name)
+                        .map { liveDelay -> (liveDelay ?: node.delay).takeIf { it != 0 } } // KimiNoBox: keep timeouts
+                }
+            }
             .stateInWhileSubscribed(viewModelScope, null)
 
     // KimiNoBox: a delay test of the node the home page shows, started by a tap on its delay
     private val _delayTesting = MutableStateFlow(false)
     val delayTesting: StateFlow<Boolean> = _delayTesting.asStateFlow()
 
-    /** KimiNoBox: tests the shown node again; the result reaches the page through the groups. */
+    /** KimiNoBox: tests the shown node again; the result reaches the page through its delay flow. */
     fun testSelectedNodeDelay() {
         val node = mainProxyNode.value ?: return
         if (!_delayTesting.compareAndSet(expect = false, update = true)) return
@@ -179,8 +186,7 @@ class HomeViewModel(
             val startedAt = System.currentTimeMillis()
             try {
                 try {
-                    val group = proxyFacade.proxyGroups.value.primaryGroup()?.name ?: node.name
-                    proxyFacade.healthCheckProxy(group, node.name)
+                    proxyFacade.healthCheckProxy(node.name)
                 } catch (error: Exception) {
                     if (error is CancellationException) throw error
                     Timber.d(error, "Home delay test failed: %s", node.name)

@@ -76,8 +76,10 @@ class CoreRouter(
 
     override suspend fun healthCheck(group: String): Map<String, Int> = pick().healthCheck(group)
 
-    override suspend fun healthCheckProxy(group: String, proxyName: String): Int =
-        pick().healthCheckProxy(group, proxyName)
+    override suspend fun healthCheckProxy(proxyName: String): Int =
+        pick().healthCheckProxy(proxyName)
+
+    override suspend fun warmUpProviderSnapshot() = pick().warmUpProviderSnapshot()
 
     override suspend fun updateProvider(type: Provider.Type, name: String) =
         pick().updateProvider(type, name)

@@ -38,6 +38,7 @@ import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeCoreOps
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeGroupHub
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeSession
 import com.github.yumeyucca.yumebox.runtime.client.session.RuntimeSessionDeps
+import com.github.yumeyucca.yumebox.domain.model.ProxyDelayStore
 import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.preview.PreviewRuntimeManager
 import kotlinx.coroutines.*
@@ -83,11 +84,13 @@ class ProxyFacade(
 
     private val appContext: Context = context.appContextOrSelf
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val delayStore = ProxyDelayStore()
     private val session: RuntimeSession
     private val coreOps = RuntimeCoreOps(connect = { session.connectBackend() })
     private val groups: RuntimeGroupHub
-    private val preview = PreviewRuntimeManager(appContext)
+    private val preview = PreviewRuntimeManager(appContext, delayStore)
     private val _nodeSession = MutableStateFlow(NodeSessionState())
+    private var lastNodeSource: NodeDataSource? = null
 
     private var previewWarmupJob: Job? = null
     private val syncPriorityRequests =
@@ -147,6 +150,7 @@ class ProxyFacade(
                 session = session,
                 coreOps = coreOps,
                 isRemoteControllerActive = { session.isRemoteControllerActive() },
+                delayStore = delayStore,
             )
         runtimeSnapshot = session.runtimeSnapshot
         isRunning = session.isRunning
@@ -167,6 +171,8 @@ class ProxyFacade(
     }
 
     fun isRemoteControllerActive(): Boolean = session.isRemoteControllerActive()
+
+    fun proxyDelayFlow(name: String) = delayStore.delayFlow(name)
 
     fun applyRemoteControllerState() = session.applyRemoteControllerState()
 
@@ -250,10 +256,10 @@ class ProxyFacade(
         }
     }
 
-    suspend fun healthCheckProxy(group: String, proxyName: String): Int =
+    suspend fun healthCheckProxy(proxyName: String): Int =
         when (nodeSession.value.source) {
-            NodeDataSource.Active -> groups.healthCheckProxy(group, proxyName)
-            NodeDataSource.Preview -> preview.healthCheckProxy(group, proxyName)
+            NodeDataSource.Active -> groups.healthCheckProxy(proxyName)
+            NodeDataSource.Preview -> preview.healthCheckProxy(proxyName)
             NodeDataSource.None -> 0
         }
 
@@ -443,6 +449,10 @@ class ProxyFacade(
 
     /** Callers only publish non-empty groups. */
     private fun publishNodeSession(source: NodeDataSource, nodeGroups: List<ProxyGroupInfo>) {
+        if (source != lastNodeSource) {
+            lastNodeSource = source
+            delayStore.publish(nodeGroups)
+        }
         _nodeSession.value =
             NodeSessionState(source = source, groups = nodeGroups, available = true, everReady = true)
     }

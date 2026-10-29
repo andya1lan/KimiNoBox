@@ -42,13 +42,13 @@ plugins {
     `jvm-toolchains`
     id("com.android.application") version "9.4.1" apply false
     id("com.android.library") version "9.4.1" apply false
-    kotlin("jvm") version "2.4.20" apply false
-    kotlin("plugin.serialization") version "2.4.20" apply false
-    kotlin("plugin.compose") version "2.4.20" apply false
+    kotlin("jvm") version "2.4.21" apply false
+    kotlin("plugin.serialization") version "2.4.21" apply false
+    kotlin("plugin.compose") version "2.4.21" apply false
     id("com.google.devtools.ksp") version "2.3.12" apply false
     id("androidx.room") version "2.8.5" apply false
-    id("com.mikepenz.aboutlibraries.plugin.android") version "15.2.0" apply false
-    id("com.diffplug.spotless") version "8.10.3" apply false
+    id("com.mikepenz.aboutlibraries.plugin.android") version "15.3.0" apply false
+    id("com.diffplug.spotless") version "8.10.4" apply false
 }
 
 // AGP-created tool configurations (unified-test-platform-*, androidLintTool) and test
@@ -57,11 +57,14 @@ plugins {
 allprojects {
     configurations.configureEach {
         resolutionStrategy.eachDependency {
-            when (requested.group) {
-                "org.bouncycastle" -> useVersion("1.86")
-                "io.netty" -> useVersion("4.1.136.Final")
-                "org.apache.httpcomponents" -> if (requested.name == "httpclient") useVersion("4.5.14")
-                "org.apache.commons" -> if (requested.name == "commons-lang3") useVersion("3.20.0")
+            when {
+                requested.group.startsWith("tools.jackson") -> useVersion("3.1.8")
+                requested.group == "org.bouncycastle" -> useVersion("1.86")
+                requested.group == "io.netty" -> useVersion("4.1.136.Final")
+                requested.group == "org.apache.httpcomponents" ->
+                    if (requested.name == "httpclient") useVersion("4.5.14")
+                requested.group == "org.apache.commons" ->
+                    if (requested.name == "commons-lang3") useVersion("3.20.0")
             }
         }
     }

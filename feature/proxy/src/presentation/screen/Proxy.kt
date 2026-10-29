@@ -36,6 +36,7 @@ import com.github.yumeyucca.yumebox.domain.model.ProxyGroupInfo
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.Folders
+import com.github.yumeyucca.yumebox.presentation.screen.node.ProvideProxyDelayFlows
 import com.github.yumeyucca.yumebox.presentation.screen.node.nodeGroupItems
 import com.github.yumeyucca.yumebox.presentation.theme.*
 import com.github.yumeyucca.yumebox.presentation.viewmodel.ProxyViewModel
@@ -164,7 +165,8 @@ fun ProxyPager(
         onDispose { proxyViewModel.ensureCoreLoaded(false, source = "proxy_page") }
     }
 
-    Scaffold(
+    ProvideProxyDelayFlows(proxyViewModel) {
+        Scaffold(
             topBar = {
                 ProxyTopBar(
                     title = YumeTxt.Proxy.Title,
@@ -285,11 +287,7 @@ fun ProxyPager(
                                 proxyViewModel.selectProxy(groupName, proxyName)
                             },
                             onTestDelay = requestSelectedGroupDelayTest,
-                            onTestProxyDelay = { proxyName ->
-                                selectedGroupName?.let { groupName ->
-                                    proxyViewModel.testProxyDelay(groupName, proxyName)
-                                }
-                            },
+                            onTestProxyDelay = proxyViewModel::testProxyDelay,
                             onScrollDirectionChanged = {},
                             useAdaptiveGrid = false,
                             searchQuery = nodeSearchQuery,
@@ -303,6 +301,7 @@ fun ProxyPager(
                 }
             }
         }
+    }
     }
 }
 
@@ -436,7 +435,8 @@ internal fun ProxyShellNodeDetailContent(
                         }
                 }
             }
-        Scaffold(
+        ProvideProxyDelayFlows(proxyViewModel) {
+            Scaffold(
                 topBar = {
                     ProxyTopBar(
                         title = pageGroup?.name ?: YumeTxt.Proxy.Title,
@@ -468,11 +468,7 @@ internal fun ProxyShellNodeDetailContent(
                             proxyViewModel.selectProxy(selectedGroup, proxyName)
                         },
                         onTestDelay = requestSelectedGroupDelayTest,
-                        onTestProxyDelay = { proxyName ->
-                            selectedGroupName?.let { groupName ->
-                                proxyViewModel.testProxyDelay(groupName, proxyName)
-                            }
-                        },
+                        onTestProxyDelay = proxyViewModel::testProxyDelay,
                         onScrollDirectionChanged = {},
                         useAdaptiveGrid = true,
                         searchQuery = nodeSearchQuery,
@@ -484,6 +480,7 @@ internal fun ProxyShellNodeDetailContent(
                     )
                 }
             }
+        }
     }
 }
 
