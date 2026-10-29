@@ -30,6 +30,6 @@ dependencies:
   - $libs.reorderable
   # KimiNoBox: node source templates. SnakeYAML Engine 3.x reads emoji names, which the
   # SnakeYAML 1.18 behind upstream's YamlCodec rejects.
-  - org.snakeyaml:snakeyaml-engine:3.1.1
+  - org.snakeyaml:snakeyaml-engine:3.2
 test-dependencies:
   - junit:junit:4.13.2 # KimiNoBox
