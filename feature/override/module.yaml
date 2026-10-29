@@ -1,0 +1,35 @@
+product:
+  type: kmp/lib
+  platforms: [android]
+apply:
+  - //compose.module-template.yaml
+settings:
+  junit: junit-4 # KimiNoBox: the fork's unit tests in test/ use JUnit 4
+  android:
+    namespace: com.github.yumeyucca.yumebox.feature.override
+dependencies:
+  - //core
+  - //common
+  - //locale
+  - //ui
+  - //data
+  - //runtime/contracts
+  - //runtime/client
+  - //feature/editor
+  - $libs.androidx.activity.compose
+  - $libs.androidx.lifecycle.viewmodel.ktx
+  - $libs.kotlinx.coroutines.android
+  - $libs.kotlinx.serialization.json
+  - $libs.koin.core
+  - $libs.koin.android
+  - $libs.koin.androidx.compose
+  - $libs.timber
+  - $libs.miuix.ui
+  - $libs.miuix.preference
+  - $libs.miuix.icons
+  - $libs.reorderable
+  # KimiNoBox: node source templates. SnakeYAML Engine 3.x reads emoji names, which the
+  # SnakeYAML 1.18 behind upstream's YamlCodec rejects.
+  - org.snakeyaml:snakeyaml-engine:3.1.1
+test-dependencies:
+  - junit:junit:4.13.2 # KimiNoBox

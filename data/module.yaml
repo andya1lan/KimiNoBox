@@ -1,0 +1,34 @@
+product:
+  type: kmp/lib
+  platforms: [android]
+apply:
+  - //android.module-template.yaml
+settings:
+  junit: junit-4 # KimiNoBox: the fork's unit tests in test/ use JUnit 4
+  android:
+    namespace: com.github.yumeyucca.yumebox.data
+  kotlin:
+    ksp:
+      processors:
+        - $libs.androidx.room.compiler
+      processorOptions:
+        room.schemaLocation: ./schemas
+dependencies:
+  - //core
+  - //locale
+  - //runtime/contracts
+  - $libs.kotlinx.coroutines.core: exported
+  - $libs.kotlinx.coroutines.android
+  - $libs.kotlinx.serialization.json
+  - $libs.snake.yaml
+  - $libs.ktor.client.core
+  - $libs.ktor.client.okhttp
+  - $libs.ktor.client.content.negotiation
+  - $libs.ktor.serialization.kotlinx.json
+  - $libs.timber
+  - $libs.koin.core
+  - $libs.androidx.room.runtime
+  - $libs.androidx.room.ktx
+  - $libs.mmkv
+test-dependencies:
+  - junit:junit:4.13.2 # KimiNoBox

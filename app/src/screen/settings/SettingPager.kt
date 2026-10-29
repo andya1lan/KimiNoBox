@@ -35,7 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.github.yumeyucca.yumebox.BuildConfig
+import com.github.yumeyucca.yumebox.BuildInfo
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
@@ -115,7 +115,7 @@ fun SettingPager(
     val scrollBehavior = MiuixScrollBehavior()
     val rootNavigator = LocalNavigator.current
     val detailNavigator = LocalDetailNavigator.current
-    val versionInfo = "v${BuildConfig.BASE_VERSION}"
+    val versionInfo = "v${BuildInfo.BASE_VERSION}"
 
     // Phone: push on root navigator. Tablet shell: replace right pane.
     // No persistent selected highlight on the list — opens should not leave a tint.

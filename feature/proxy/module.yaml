@@ -1,0 +1,34 @@
+product:
+  type: kmp/lib
+  platforms: [android]
+apply:
+  - //compose.module-template.yaml
+settings:
+  junit: junit-4 # KimiNoBox: the fork's unit tests in test/ use JUnit 4
+  android:
+    namespace: com.github.yumeyucca.yumebox.feature.proxy
+dependencies:
+  - //core
+  - //common
+  - //locale
+  - //ui
+  - //data
+  - //runtime/client
+  - //runtime/contracts # KimiNoBox: runtime snapshot for the open group reload
+  - $libs.androidx.activity.compose
+  - $libs.androidx.lifecycle.viewmodel.ktx
+  - $libs.kotlinx.coroutines.android
+  - $libs.koin.core
+  - $libs.koin.android
+  - $libs.koin.androidx.compose
+  - $libs.timber
+  - $libs.haze
+  - $libs.haze.blur
+  - $libs.haze.blur.materials
+  - $libs.sketch.compose
+  - $libs.sketch.http
+  - $libs.miuix.ui
+  - $libs.miuix.preference
+  - $libs.miuix.icons
+test-dependencies:
+  - junit:junit:4.13.2 # KimiNoBox
