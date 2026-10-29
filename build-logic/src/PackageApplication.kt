@@ -87,7 +87,8 @@ private fun packageLocked(root: File, state: File, options: Map<String, String>,
     }
     val prepared = workspace.resolve("prepared.apk")
     rewriteApk(rewritten, prepared, additions) { name ->
-        name.startsWith("META-INF/") || name.endsWith(".kotlin_module") || name.endsWith(".kotlin_builtins") ||
+        // KimiNoBox: keep META-INF/services; ServiceLoader finds Sketch's HTTP fetcher (group icons) there
+        (name.startsWith("META-INF/") && !name.startsWith("META-INF/services/")) || name.endsWith(".kotlin_module") || name.endsWith(".kotlin_builtins") ||
             (name.startsWith("lib/") && name.substringAfterLast('/').startsWith("libjavet") || name.endsWith("BundleMRS.7z"))
     }
     val signing = signingIdentity(root, tools, variant, "--allow-unsigned" in flags)
