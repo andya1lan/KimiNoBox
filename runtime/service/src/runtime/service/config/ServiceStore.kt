@@ -168,7 +168,8 @@ class ServiceStore {
         }
 
     var systemProxy: Boolean
-        get() = readBoolean(newKey = "systemProxy", legacyKey = "system_proxy", defaultValue = true)
+        // KimiNoBox: off by default, matching NetworkSettingsStore.systemProxy
+        get() = readBoolean(newKey = "systemProxy", legacyKey = "system_proxy", defaultValue = false)
         set(value) {
             networkSettings.encode("systemProxy", value)
             store.provider.setBoolean("system_proxy", value)

@@ -40,7 +40,7 @@ class NetworkSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = e
     val dnsHijack by boolFlow(true)
     val allowBypass by boolFlow(true)
     val enableIPv6 by boolFlow(false)
-    val systemProxy by boolFlow(true)
+    val systemProxy by boolFlow(false) // KimiNoBox: off by default; everything still goes through the tun
 
     // All modes: drop the user override chain. Root Tun additionally skips mode geometry
     // injection and compiler runtime patches (skipRuntimePatches).
