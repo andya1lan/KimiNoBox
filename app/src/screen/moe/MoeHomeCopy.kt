@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp // KimiNoBox
+import androidx.compose.ui.unit.isSpecified // KimiNoBox
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.*
@@ -29,6 +31,7 @@ internal fun MoeHomeCopyBlock(
     quoteText: String,
     color: Color,
     modifier: Modifier = Modifier,
+    quoteWidth: Dp = Dp.Unspecified, // KimiNoBox: a fixed width keeps the line breaks put
     launchContent: @Composable (() -> Unit)? = null,
 ) {
     val greeting = remember(nowMillis) { moeGreetingText(nowMillis) }
@@ -52,6 +55,7 @@ internal fun MoeHomeCopyBlock(
             softWrap = true,
             maxLines = 3, // KimiNoBox: the default quote takes three lines on a phone
             overflow = TextOverflow.Clip,
+            modifier = if (quoteWidth.isSpecified) Modifier.width(quoteWidth) else Modifier, // KimiNoBox
         )
         launchContent?.let { content ->
             Box(Modifier

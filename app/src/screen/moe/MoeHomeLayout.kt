@@ -98,6 +98,10 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
         val contentStart = (sidebarWidth - MoeUi.Sidebar.contentOverlap).coerceAtLeast(UiDp.dp0)
         // KimiNoBox: a fixed large corner instead of the screen corner makes the panel a D
         val screenCorner = MoeDuoUi.panelCorner
+        // KimiNoBox: the quote keeps the expanded panel's width, so swipes never rewrap it
+        val quoteWidth =
+            maxWidth - contentStart -
+                (MoeUi.Hero.containerHorizontalInset + MoeUi.Hero.contentHorizontalInset) * 2
         val page = state.pageProgress.coerceIn(0f, 1f)
         val sidebar = state.sidebarProgress.coerceIn(0f, 1f) * state.sidebarToggleProgress
         val sidebarWidthVisible = lerpDp(MoeUi.Sidebar.collapsedVisibleWidth, contentStart, sidebar)
@@ -149,7 +153,7 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
                     },
             )
         }
-        MoeHomePanel(state, contentStart, heroHeight, sidebar, screenCorner)
+        MoeHomePanel(state, contentStart, heroHeight, sidebar, screenCorner, quoteWidth)
     }
 }
 
@@ -161,6 +165,7 @@ private fun MoeHomePanel(
     heroHeight: Dp,
     sidebar: Float,
     screenCorner: Dp,
+    quoteWidth: Dp, // KimiNoBox
 ) {
     val corner = lerpDp(UiDp.dp0, screenCorner, sidebar)
     // KimiNoBox: the panel starts below the frosted status bar, while the hero and the copy keep
@@ -198,6 +203,7 @@ private fun MoeHomePanel(
         MoeHomeCopy(
             state,
             top = state.statusBarTop + heroHeight + MoeUi.Hero.belowHeroTopGap - panelTop,
+            quoteWidth = quoteWidth,
         )
     }
 }
@@ -301,6 +307,7 @@ context(actions: MoeHomeActions)
 private fun BoxScope.MoeHomeCopy(
     state: MoeHomeLayoutState,
     top: Dp, // KimiNoBox
+    quoteWidth: Dp, // KimiNoBox
 ) {
     Column(
         modifier =
@@ -320,6 +327,7 @@ private fun BoxScope.MoeHomeCopy(
             quoteText = state.quote,
             color = MiuixTheme.colorScheme.onBackground,
             modifier = Modifier.fillMaxWidth(),
+            quoteWidth = quoteWidth, // KimiNoBox
         ) {
             MoeLaunchControls(
                 controlState = state.controlState,
