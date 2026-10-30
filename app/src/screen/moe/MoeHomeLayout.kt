@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer // KimiNoBox
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -107,6 +108,7 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
         remember(sidebar) {
             derivedStateOf { sidebar > 0.03f }
         }
+        val backdropLayer = rememberGraphicsLayer() // KimiNoBox: the Duo strip reads its ink from it
         MoeWallpaperBackground(
             wallpaperUri = state.wallpaperUri,
             wallpaperZoom = state.wallpaperZoom,
@@ -115,7 +117,8 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
             qualityMode = MoeWallpaperQualityMode.BackgroundBlur,
             modifier = Modifier
                 .matchParentSize()
-                .hazeSource(state = sidebarHazeState),
+                .hazeSource(state = sidebarHazeState)
+                .moeDuoBackdrop(backdropLayer), // KimiNoBox
         )
         // KimiNoBox: frosted glass under the whole panel, showing as the status bar on top and the
         // strip on the right like the iPhone Duo outer screen's (MoeDuoSidebar.kt); only the
@@ -132,9 +135,11 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
         ) {
             MoeDuoSidebarContent(
                 state = state,
+                stripWidth = contentStart,
                 visibleWidth = sidebarWidthVisible,
                 statusTop = state.statusBarTop + MoeDuoUi.heroTopGap,
                 hazeState = sidebarHazeState,
+                backdropLayer = backdropLayer,
                 glassEnabled = blurReady,
                 onTestDelay = actions.testDelay,
                 modifier =
