@@ -1,6 +1,6 @@
 // Copyright 2026, compose-miuix-ui contributors
 // SPDX-License-Identifier: Apache-2.0
-// KimiNoBox: vendored from the compose-miuix-ui v0.9.4 example (example/shared/.../component/animation); package renamed.
+// KimiNoBox: vendored from the compose-miuix-ui v0.9.4 example (example/shared/.../component/animation); package renamed, updateValue starts undispatched.
 
 package com.github.yumeyucca.yumebox.presentation.component.liquid
 
@@ -128,7 +128,9 @@ internal class DampedDragAnimation(
 
     fun updateValue(value: Float) {
         val targetValue = value.coerceIn(valueRange)
-        animationScope.launch {
+        // KimiNoBox: undispatched, so targetValue is set before a tap's up reads it in
+        // onDragStopped; dispatched, a quick tap could land back on the old tab.
+        animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
             valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() }
         }
     }
