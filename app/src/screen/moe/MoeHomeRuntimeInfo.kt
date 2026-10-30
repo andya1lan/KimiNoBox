@@ -15,6 +15,7 @@ package com.github.yumeyucca.yumebox.screen.moe
 
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.TextAutoSize // KimiNoBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -151,14 +152,23 @@ private fun MoeInfoBlock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
+        val style = MiuixTheme.textStyles.body1
         Text(
             text = value,
             color = valueColor,
-            style = MiuixTheme.textStyles.body1,
+            style = style,
             fontWeight = FontWeight.Medium,
             fontFamily = valueFontFamily,
             maxLines = 1,
-            overflow = TextOverflow.Clip,
+            // KimiNoBox: a long node name first shrinks, then loses its middle, so both its region
+            // and its number or tags stay readable (it used to be cut off at the end)
+            autoSize =
+                TextAutoSize.StepBased(
+                    minFontSize = 12.sp,
+                    maxFontSize = style.fontSize,
+                    stepSize = 0.5.sp,
+                ),
+            overflow = TextOverflow.MiddleEllipsis,
             modifier = if (alignEnd) Modifier else Modifier.weight(1f),
         )
     }
