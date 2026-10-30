@@ -162,7 +162,7 @@ class HomeViewModel(
         mainProxyNode.map { it?.name }.stateInWhileSubscribed(viewModelScope, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val selectedServerPing: StateFlow<Int?> =
+    private val latestServerPing: Flow<Int?> = // KimiNoBox: selectedServerPing filters it
         mainProxyNode
             .flatMapLatest { node ->
                 if (node == null) {
@@ -172,30 +172,75 @@ class HomeViewModel(
                         .map { liveDelay -> (liveDelay ?: node.delay).takeIf { it != 0 } } // KimiNoBox: keep timeouts
                 }
             }
+
+    // KimiNoBox: a fresh run hides the last run's delay until its own first test is done
+    private val _awaitingFreshDelay = MutableStateFlow(false)
+
+    val selectedServerPing: StateFlow<Int?> =
+        combine(latestServerPing, _awaitingFreshDelay) { ping, awaiting -> ping.takeUnless { awaiting } }
             .stateInWhileSubscribed(viewModelScope, null)
 
-    // KimiNoBox: a delay test of the node the home page shows, started by a tap on its delay
+    // KimiNoBox: a delay test of the node the home page shows, started by a tap on its delay or by a
+    // fresh run
     private val _delayTesting = MutableStateFlow(false)
-    val delayTesting: StateFlow<Boolean> = _delayTesting.asStateFlow()
+    val delayTesting: StateFlow<Boolean> =
+        combine(_delayTesting, _awaitingFreshDelay) { testing, awaiting -> testing || awaiting }
+            .stateInWhileSubscribed(viewModelScope, false)
 
     /** KimiNoBox: tests the shown node again; the result reaches the page through its delay flow. */
     fun testSelectedNodeDelay() {
+        viewModelScope.launch { runSelectedNodeDelayTest() }
+    }
+
+    /** KimiNoBox: returns once the test is over and its result has reached the delay flow. */
+    private suspend fun runSelectedNodeDelayTest() {
         val node = mainProxyNode.value ?: return
         if (!_delayTesting.compareAndSet(expect = false, update = true)) return
-        viewModelScope.launch {
-            val startedAt = System.currentTimeMillis()
+        val startedAt = System.currentTimeMillis()
+        try {
             try {
-                try {
-                    proxyFacade.healthCheckProxy(node.name)
-                } catch (error: Exception) {
-                    if (error is CancellationException) throw error
-                    Timber.d(error, "Home delay test failed: %s", node.name)
-                }
-                // One whole turn at least, so a quick answer still reads as a refresh
-                delay(MIN_DELAY_TEST_MS - (System.currentTimeMillis() - startedAt))
-            } finally {
-                _delayTesting.value = false
+                proxyFacade.healthCheckProxy(node.name)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Timber.d(error, "Home delay test failed: %s", node.name)
             }
+            // One whole turn at least, so a quick answer still reads as a refresh
+            delay(MIN_DELAY_TEST_MS - (System.currentTimeMillis() - startedAt))
+        } finally {
+            _delayTesting.value = false
+        }
+    }
+
+    /**
+     * KimiNoBox: a run that has just started tests its node once the core has resolved it and the
+     * tunnel had a moment to settle. A run that was already going when the page opened keeps its
+     * delay.
+     */
+    private fun observeFreshRunDelay() {
+        viewModelScope.launch {
+            runtimeSnapshot
+                .map { snapshot ->
+                    snapshot.startedAt.takeIf { RuntimeStateMapper.isActuallyRunning(snapshot) }
+                }
+                .distinctUntilChanged()
+                .collectLatest { startedAt ->
+                    val fresh =
+                        startedAt != null && System.currentTimeMillis() - startedAt < FRESH_RUN_MS
+                    if (!fresh) {
+                        _awaitingFreshDelay.value = false
+                        return@collectLatest
+                    }
+                    _awaitingFreshDelay.value = true
+                    try {
+                        withTimeoutOrNull(FRESH_RUN_NODE_WAIT_MS) {
+                            mainProxyNode.first { it != null }
+                        } ?: return@collectLatest
+                        delay(FRESH_RUN_SETTLE_MS)
+                        runSelectedNodeDelayTest()
+                    } finally {
+                        _awaitingFreshDelay.value = false
+                    }
+                }
         }
     }
 
@@ -289,6 +334,7 @@ class HomeViewModel(
         syncProxyModeState()
         startSpeedSampling()
         observeProfileChanges()
+        observeFreshRunDelay() // KimiNoBox
     }
 
     // Fault barrier: repository failure only logs and marks profiles as loaded (CE rethrown).
@@ -673,3 +719,9 @@ class HomeViewModel(
 }
 
 private const val MIN_DELAY_TEST_MS = 800L // KimiNoBox: one turn of the refresh glyph
+
+// KimiNoBox: a run started this recently counts as fresh, and its first delay test waits this long
+// for the node, then this long for the tunnel to settle
+private const val FRESH_RUN_MS = 60_000L
+private const val FRESH_RUN_NODE_WAIT_MS = 30_000L
+private const val FRESH_RUN_SETTLE_MS = 1_000L
