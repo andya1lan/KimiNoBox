@@ -72,6 +72,7 @@ internal fun MoeSidebarDecoration(
     blurEnabled: Boolean,
     blurProgress: Float,
     modifier: Modifier = Modifier,
+    outerEdgeAtEnd: Boolean = false, // KimiNoBox: the Duo strip is on the right
     content: @Composable BoxScope.() -> Unit,
 ) {
     val spacing = AppTheme.spacing
@@ -116,7 +117,9 @@ internal fun MoeSidebarDecoration(
                 .background(
                     brush =
                         Brush.horizontalGradient(
-                            colors = listOf(glassGradientStart, glassGradientEnd)
+                            colors =
+                                listOf(glassGradientStart, glassGradientEnd)
+                                    .let { if (outerEdgeAtEnd) it.reversed() else it } // KimiNoBox
                         ),
                     shape = RectangleShape,
                 )

@@ -53,6 +53,8 @@ dependencies:
   - $libs.haze
   - $libs.haze.blur
   - $libs.haze.blur.materials
+  - $libs.haze.glass # KimiNoBox: Duo strip capsule
+  - $libs.shapes # KimiNoBox: Duo panel corners
   - $libs.decompose
   - $libs.decompose.extensions.compose
   - $libs.mmkv

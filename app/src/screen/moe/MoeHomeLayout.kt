@@ -20,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -41,12 +40,12 @@ import com.github.yumeyucca.yumebox.data.network.IpInfo
 import com.github.yumeyucca.yumebox.domain.model.TrafficData
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.screen.home.HomeProxyControlState
+import com.kyant.shapes.UnevenRoundedRectangle // KimiNoBox
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.getRoundedCorner
 
 internal data class MoeHomeLayoutState(
     val wallpaperUri: String,
@@ -96,11 +95,8 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
         }
         val sidebarWidth = maxWidth * MoeUi.Sidebar.fraction
         val contentStart = (sidebarWidth - MoeUi.Sidebar.contentOverlap).coerceAtLeast(UiDp.dp0)
-        // Devices with tiny/no system corners still need a readable panel radius; keep real
-        // screen corners only when they already clear the 16dp threshold.
-        val systemCorner = getRoundedCorner()
-        val screenCorner = if (systemCorner < UiDp.dp16) UiDp.dp24 else systemCorner
-        val sidebarDecorationWidth = maxOf(sidebarWidth, contentStart + screenCorner)
+        // KimiNoBox: a fixed large corner instead of the screen corner makes the panel a D
+        val screenCorner = MoeDuoUi.panelCorner
         val page = state.pageProgress.coerceIn(0f, 1f)
         val sidebar = state.sidebarProgress.coerceIn(0f, 1f) * state.sidebarToggleProgress
         val sidebarWidthVisible = lerpDp(MoeUi.Sidebar.collapsedVisibleWidth, contentStart, sidebar)
@@ -121,26 +117,30 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
                 .matchParentSize()
                 .hazeSource(state = sidebarHazeState),
         )
+        // KimiNoBox: frosted glass under the whole panel, showing as the status bar on top and the
+        // strip on the right like the iPhone Duo outer screen's (MoeDuoSidebar.kt); only the
+        // strip's content slides away
         MoeSidebarDecoration(
             hazeState = sidebarHazeState,
             blurEnabled = blurReady,
             blurProgress = sidebar,
+            outerEdgeAtEnd = true,
             modifier =
                 Modifier
-                    .align(Alignment.CenterStart)
-                    .width(sidebarDecorationWidth)
-                    .fillMaxHeight()
-                    .graphicsLayer {
-                        translationX = with(density) { lerpDp((-56).dp, UiDp.dp0, sidebar).toPx() }
-                        alpha = lerpFloat(0.78f, 1f, sidebar) * page
-                    },
+                    .matchParentSize()
+                    .graphicsLayer { alpha = lerpFloat(0.78f, 1f, sidebar) * page },
         ) {
-            MoeSidebarContent(
-                topValue = state.duration.top,
-                bottomValue = state.duration.bottom,
-                batteryPercent = state.batteryPercent,
-                icons = state.sidebarIcons,
+            MoeDuoSidebarContent(
+                state = state,
                 visibleWidth = sidebarWidthVisible,
+                statusTop = state.statusBarTop + MoeDuoUi.heroTopGap,
+                hazeState = sidebarHazeState,
+                glassEnabled = blurReady,
+                onTestDelay = actions.testDelay,
+                modifier =
+                    Modifier.graphicsLayer {
+                        translationX = with(density) { lerpDp(56.dp, UiDp.dp0, sidebar).toPx() }
+                    },
             )
         }
         MoeHomePanel(state, contentStart, heroHeight, sidebar, screenCorner)
@@ -157,6 +157,10 @@ private fun MoeHomePanel(
     screenCorner: Dp,
 ) {
     val corner = lerpDp(UiDp.dp0, screenCorner, sidebar)
+    // KimiNoBox: the panel starts below the frosted status bar, while the hero and the copy keep
+    // their place on screen
+    val panelTop = lerpDp(UiDp.dp0, state.statusBarTop, sidebar)
+    val heroTop = state.statusBarTop + MoeDuoUi.heroTopGap
     val heroScale =
         if (state.pageProgress >= 0.999f) 1f
         else
@@ -168,24 +172,39 @@ private fun MoeHomePanel(
     Box(
         Modifier
             .fillMaxSize()
-            .padding(start = lerpDp(UiDp.dp0, contentStart, sidebar))
+            // KimiNoBox: strip on the right, frosted status bar on top
+            .padding(top = panelTop, end = lerpDp(UiDp.dp0, contentStart, sidebar))
             .background(
                 color = state.contentSurface,
-                shape =
-                    RoundedCornerShape(
-                        topStart = corner,
-                        bottomStart = corner,
-                    ),
+                // KimiNoBox: continuous corners on the strip side only, so the panel reads as a D
+                shape = UnevenRoundedRectangle(topEnd = corner, bottomEnd = corner),
             )
     ) {
-        MoeHero(state, heroScale)
-        MoeHomeCopy(state, heroHeight)
+        // KimiNoBox: positions inside the panel, which moved down by panelTop
+        MoeHero(
+            state,
+            heroScale,
+            top = heroTop - panelTop,
+            height = heroHeight - MoeDuoUi.heroTopGap,
+            // concentric with the D corner, so the gap around it stays even
+            topEndRadius = maxOf(MoeUi.Shape.heroRadius, corner - MoeDuoUi.heroTopGap),
+        )
+        MoeHomeCopy(
+            state,
+            top = state.statusBarTop + heroHeight + MoeUi.Hero.belowHeroTopGap - panelTop,
+        )
     }
 }
 
 @Composable
 context(actions: MoeHomeActions)
-private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
+private fun BoxScope.MoeHero(
+    state: MoeHomeLayoutState,
+    scale: Float,
+    top: Dp, // KimiNoBox
+    height: Dp, // KimiNoBox
+    topEndRadius: Dp, // KimiNoBox
+) {
     val toggleSidebar by rememberUpdatedState(actions.toggleSidebar)
     val pickWallpaper by rememberUpdatedState(actions.pickWallpaper)
     Box(
@@ -195,9 +214,9 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
             .padding(
                 start = MoeUi.Hero.containerHorizontalInset,
                 end = MoeUi.Hero.containerHorizontalInset,
-                top = state.statusBarTop,
+                top = top, // KimiNoBox
             )
-            .fillMaxHeight(MoeUi.Hero.heightFraction)
+            .height(height) // KimiNoBox: fixed, so the panel's moving top edge never resizes it
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { toggleSidebar() },
@@ -209,7 +228,13 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
                 scaleX = scale
                 scaleY = scale
             }
-            .squircleClip(MoeUi.Shape.heroRadius)
+            // KimiNoBox: the top-end corner follows the D corner
+            .squircleClip(
+                topStart = MoeUi.Shape.heroRadius,
+                topEnd = topEndRadius,
+                bottomEnd = MoeUi.Shape.heroRadius,
+                bottomStart = MoeUi.Shape.heroRadius,
+            )
     ) {
         MoeWallpaperBackground(
             wallpaperUri = state.wallpaperUri,
@@ -267,7 +292,10 @@ private fun BoxScope.MoeHero(state: MoeHomeLayoutState, scale: Float) {
 
 @Composable
 context(actions: MoeHomeActions)
-private fun BoxScope.MoeHomeCopy(state: MoeHomeLayoutState, heroHeight: Dp) {
+private fun BoxScope.MoeHomeCopy(
+    state: MoeHomeLayoutState,
+    top: Dp, // KimiNoBox
+) {
     Column(
         modifier =
             Modifier
@@ -276,7 +304,7 @@ private fun BoxScope.MoeHomeCopy(state: MoeHomeLayoutState, heroHeight: Dp) {
                 .padding(
                     start = MoeUi.Hero.containerHorizontalInset + MoeUi.Hero.contentHorizontalInset,
                     end = MoeUi.Hero.containerHorizontalInset + MoeUi.Hero.contentHorizontalInset,
-                    top = state.statusBarTop + heroHeight + MoeUi.Hero.belowHeroTopGap,
+                    top = top, // KimiNoBox
                 ),
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(MoeUi.Hero.belowHeroContentGap),
