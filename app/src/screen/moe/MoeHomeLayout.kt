@@ -142,6 +142,7 @@ internal fun MoeHomeLayout(state: MoeHomeLayoutState) {
                 backdropLayer = backdropLayer,
                 glassEnabled = blurReady,
                 onTestDelay = actions.testDelay,
+                onStart = actions.toggleProxy,
                 modifier =
                     Modifier.graphicsLayer {
                         translationX = with(density) { lerpDp(56.dp, UiDp.dp0, sidebar).toPx() }

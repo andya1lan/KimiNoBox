@@ -121,6 +121,7 @@ internal fun BoxScope.MoeDuoSidebarContent(
     backdropLayer: GraphicsLayer,
     glassEnabled: Boolean,
     onTestDelay: () -> Unit,
+    onStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // MoeSidebarDecoration pads its content by space24 at the top and bottom, which keeps the
@@ -179,6 +180,8 @@ internal fun BoxScope.MoeDuoSidebarContent(
             testing = state.delayTesting,
             darkness = statusDarkness,
             onTestDelay = onTestDelay,
+            canStart = state.controlState == HomeProxyControlState.Idle && state.canLaunch,
+            onStart = onStart,
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
@@ -211,7 +214,8 @@ private fun moeDuoTrack(darkness: Float): Color =
 /**
  * The Duo's status circle turned into the proxy's: the uptime, stacked like the original Moe
  * rail's clock, replaces the clock, and the ring shows the selected node's delay like a signal. A
- * tap on the ring tests the node again. [uptime] is null while the proxy is not running.
+ * tap on the ring tests the node again, or starts the proxy while it is off. [uptime] is null
+ * while the proxy is not running.
  */
 @Composable
 private fun MoeDuoStatusBlock(
@@ -221,6 +225,8 @@ private fun MoeDuoStatusBlock(
     testing: Boolean,
     darkness: Float,
     onTestDelay: () -> Unit,
+    canStart: Boolean,
+    onStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ink = moeDuoInk(darkness)
@@ -241,6 +247,8 @@ private fun MoeDuoStatusBlock(
             testing = testing,
             darkness = darkness,
             onTestDelay = onTestDelay,
+            canStart = canStart,
+            onStart = onStart,
             modifier = Modifier.padding(top = MoeDuoUi.ringTopGap),
         )
     }
@@ -267,6 +275,8 @@ private fun MoeDuoDelayRing(
     testing: Boolean,
     darkness: Float,
     onTestDelay: () -> Unit,
+    canStart: Boolean,
+    onStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val running = phase == MoeDuoPhase.Running
@@ -290,11 +300,12 @@ private fun MoeDuoDelayRing(
                 .size(MoeDuoUi.ringSize)
                 .clip(CircleShape)
                 .clickable(
-                    enabled = running && !testing,
-                    onClickLabel = YumeTxt.Proxy.Action.Test,
+                    // The power glyph starts the proxy like the Start button; the delay tests again
+                    enabled = if (running) !testing else phase == MoeDuoPhase.Idle && canStart,
+                    onClickLabel = if (running) YumeTxt.Proxy.Action.Test else YumeTxt.Home.Control.Start,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onTestDelay,
+                    onClick = if (running) onTestDelay else onStart,
                 ),
         contentAlignment = Alignment.Center,
     ) {
@@ -332,7 +343,7 @@ private fun MoeDuoDelayRing(
                     style = Stroke(width = stroke),
                 )
             }
-            if (!running) drawPowerGlyph(ink.copy(alpha = ink.alpha * 0.6f))
+            if (!running) drawPowerGlyph(ink.copy(alpha = ink.alpha * if (canStart) 0.8f else 0.5f))
         }
         if (running) {
             Text(
