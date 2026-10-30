@@ -232,9 +232,11 @@ fun rememberBottomBarReservedHeight(): Dp {
             )
                 .toDp()
         }
-    return remember(systemBottomInset) {
-        MainBottomBarDefaults.FloatingReservedHeight + systemBottomInset
-    }
+    // KimiNoBox: the liquid glass bar is taller
+    val barReservedHeight =
+        if (LocalBottomBarBackdrop.current != null) LiquidGlassTabBarDefaults.ReservedHeight
+        else MainBottomBarDefaults.FloatingReservedHeight
+    return remember(systemBottomInset, barReservedHeight) { barReservedHeight + systemBottomInset }
 }
 
 private fun Modifier.bottomBarHazeEffect(state: HazeState?, style: HazeBlurStyle?): Modifier =
@@ -329,6 +331,33 @@ private fun FloatingBottomBarContent(
             val gestureBottom = WindowInsets.systemGestures.getBottom(this)
             max(navigationBottom, gestureBottom).toDp()
         }
+
+    // KimiNoBox: with the glass on, the bar is liquid glass over the recorded pager
+    val glassBackdrop = LocalBottomBarBackdrop.current
+    if (glassBackdrop != null) {
+        LiquidGlassTabBar(
+            destinations = destinations,
+            selectedIndex = mainPagerState.selectedPage,
+            enabled = bottomBarVisible,
+            backdrop = glassBackdrop,
+            // The bar follows selectedPage, so a tap retargets even mid-navigation
+            onTabClick = { index -> destinations.getOrNull(index)?.let(handlePageChange) },
+            modifier =
+                Modifier
+                    .padding(
+                        start = LiquidGlassTabBarDefaults.HorizontalPadding,
+                        end = LiquidGlassTabBarDefaults.HorizontalPadding,
+                        top = MainBottomBarDefaults.TopPadding,
+                        bottom = bottomSafeInset + MainBottomBarDefaults.FloatingBottomPadding,
+                    )
+                    .graphicsLayer {
+                        alpha = animatedAlpha
+                        translationY = animatedTranslationY.value
+                    },
+        )
+        return
+    }
+
     val selectedColor = MiuixTheme.colorScheme.primary
     val unselectedColor = MiuixTheme.colorScheme.onSurface.copy(alpha = opacity.secondaryText)
     val containerColor = MiuixTheme.colorScheme.background

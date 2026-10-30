@@ -50,6 +50,7 @@ dependencies:
   - $libs.miuix.ui
   - $libs.miuix.preference
   - $libs.miuix.icons
+  - $libs.miuix.blur # KimiNoBox: liquid glass tab bar
   - $libs.haze
   - $libs.haze.blur
   - $libs.haze.blur.materials

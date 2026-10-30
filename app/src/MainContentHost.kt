@@ -62,6 +62,7 @@ import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.blur.layerBackdrop // KimiNoBox
 
 /**
  * Hosts the main pager (and optional tablet dual-pane shell).
@@ -237,6 +238,7 @@ private fun MainPagerHost(
     onOpenPanel: () -> Unit,
 ) {
     val bottomBarScrollBehavior = LocalBottomBarScrollBehavior.current
+    val bottomBarBackdrop = LocalBottomBarBackdrop.current // KimiNoBox
     Box(Modifier.fillMaxSize()) {
         HorizontalPager(
             modifier =
@@ -246,6 +248,9 @@ private fun MainPagerHost(
                     } else {
                         modifier
                     }
+                }.let { modifier ->
+                    // KimiNoBox: recorded for the liquid glass tab bar
+                    bottomBarBackdrop?.let { modifier.layerBackdrop(it) } ?: modifier
                 },
             state = mainPagerState.pagerState,
             beyondViewportPageCount = (visibleDestinations.size - 1).coerceAtLeast(0),
@@ -287,7 +292,11 @@ private fun MainPagerHost(
 
         BottomEdgeScrim(
             color = bottomBarScrimColor,
-            visible = bottomBarVisible && (bottomBarScrollBehavior?.isBottomBarVisible ?: true),
+            // KimiNoBox: the liquid glass shows the page behind it, so no scrim under it
+            visible =
+                bottomBarBackdrop == null &&
+                    bottomBarVisible &&
+                    (bottomBarScrollBehavior?.isBottomBarVisible ?: true),
             height = visibleBottomBarReservedHeight + UiDp.dp28,
         )
 

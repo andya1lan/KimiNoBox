@@ -55,6 +55,8 @@ import com.github.yumeyucca.yumebox.screen.settings.SettingPager
 import dev.chrisbanes.haze.HazeState
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported // KimiNoBox
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop // KimiNoBox
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -198,6 +200,12 @@ fun MainScreen(
         bottomBarBackground.takeIf { MiuixTheme.colorScheme.background.luminance() < 0.5f }
             ?: Color.White
     val bottomBarHazeStyle = YumeHaze.bottomBarStyle(bottomBarBackground)
+    // KimiNoBox: the pager as the liquid glass tab bar sees it, on the Scaffold's surface
+    val pagerSurfaceColor = MiuixTheme.colorScheme.surface
+    val bottomBarBackdrop = rememberLayerBackdrop {
+        drawRect(pagerSurfaceColor)
+        drawContent()
+    }
 
     LaunchedEffect(visibleDestinations) {
         val pending = pendingDestination
@@ -325,6 +333,9 @@ fun MainScreen(
         LocalBottomBarScrollBehavior provides bottomBarScrollBehavior,
         LocalBottomBarHazeState provides if (topBarBlurEnabled) hazeState else null,
         LocalBottomBarHazeStyle provides if (topBarBlurEnabled) bottomBarHazeStyle else null,
+        // KimiNoBox: liquid glass needs runtime shaders (Android 13+) for its lens
+        LocalBottomBarBackdrop provides
+            bottomBarBackdrop.takeIf { topBarBlurEnabled && isRuntimeShaderSupported() },
         LocalUseSystemWallpaper provides useSystemWallpaper,
     ) {
         MainContentHost(
