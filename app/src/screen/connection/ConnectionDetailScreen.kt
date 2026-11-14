@@ -68,7 +68,7 @@ fun ConnectionDetailScreen(navigator: Navigator, connectionId: String) {
 
     LaunchedEffect(connectionId, canInterrupt) {
         if (!canInterrupt) return@LaunchedEffect
-        PollingTimers.ticks(PollingTimerSpecs.ConnectionsPolling).collect {
+        PollingTimers.foregroundTicks(PollingTimerSpecs.ConnectionsPolling).collect { // KimiNoBox
             val latest =
                 withContext(Dispatchers.IO) {
                     runCatching {

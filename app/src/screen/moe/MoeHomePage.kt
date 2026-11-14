@@ -152,9 +152,10 @@ fun MoeHomePage(
     val visualControlState = controlState
     // Tick once a second whether running or idle: running drives the elapsed timer, idle drives the
     // wall-clock shown in the rail so it always reflects the real time instead of a frozen 00:00.
+    // KimiNoBox: only while the app is visible
     val now by
     produceState(initialValue = System.currentTimeMillis()) {
-        PollingTimers.ticks(PollingTimerSpecs.MoeElapsedClock).collect {
+        PollingTimers.foregroundTicks(PollingTimerSpecs.MoeElapsedClock).collect {
             value = System.currentTimeMillis()
         }
     }

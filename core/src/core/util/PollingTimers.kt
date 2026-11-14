@@ -98,6 +98,17 @@ object PollingTimers {
                 )
         }
 
+    /**
+     * KimiNoBox: [ticks] for UI polling. Silent while no activity is started (app in the
+     * background or screen off), since a stopped activity keeps its composition and ViewModels,
+     * and every poller in them, alive.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun foregroundTicks(spec: PollingTimerSpec): Flow<Long> =
+        AppVisibilityTracker.isForeground.flatMapLatest { foreground ->
+            if (foreground) ticks(spec) else emptyFlow()
+        }
+
     suspend fun awaitTick(spec: PollingTimerSpec) {
         ticks(spec).first()
     }

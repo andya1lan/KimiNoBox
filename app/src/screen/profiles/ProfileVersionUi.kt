@@ -27,10 +27,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.toast
+import com.github.yumeyucca.yumebox.core.util.AppVisibilityTracker
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileVersions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
@@ -85,7 +87,8 @@ internal object VersionNotes {
 
 /**
  * KimiNoBox: version notes of the listed profiles. They change in the service process after a
- * start or reload, so the list re-reads them every few seconds while it is shown.
+ * start or reload, so the list re-reads them every few seconds while the app is visible. The main
+ * pager keeps this page composed in the background too.
  */
 @Composable
 internal fun rememberVersionNotes(profiles: List<Profile>): Map<UUID, VersionNote> {
@@ -93,18 +96,21 @@ internal fun rememberVersionNotes(profiles: List<Profile>): Map<UUID, VersionNot
     var notes by remember { mutableStateOf(emptyMap<UUID, VersionNote>()) }
     val uuids = remember(profiles) { profiles.map(Profile::uuid) }
     LaunchedEffect(uuids) {
-        while (true) {
-            notes =
-                withContext(Dispatchers.IO) {
-                    uuids.mapNotNull { uuid ->
-                        runCatching { ProfileVersions.status(context, uuid) }
-                            .getOrNull()
-                            ?.let(VersionNotes::of)
-                            ?.let { uuid to it }
+        AppVisibilityTracker.isForeground.collectLatest { foreground ->
+            if (!foreground) return@collectLatest
+            while (true) {
+                notes =
+                    withContext(Dispatchers.IO) {
+                        uuids.mapNotNull { uuid ->
+                            runCatching { ProfileVersions.status(context, uuid) }
+                                .getOrNull()
+                                ?.let(VersionNotes::of)
+                                ?.let { uuid to it }
+                        }
+                            .toMap()
                     }
-                        .toMap()
-                }
-            delay(REFRESH_MS)
+                delay(REFRESH_MS)
+            }
         }
     }
     return notes

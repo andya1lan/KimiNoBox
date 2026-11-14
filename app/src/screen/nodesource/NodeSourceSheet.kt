@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.github.yumeyucca.yumebox.core.util.AppVisibilityTracker
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
 import com.github.yumeyucca.yumebox.nodesource.CheckedOrder
 import com.github.yumeyucca.yumebox.nodesource.NodeNameClash
@@ -52,7 +53,7 @@ import com.github.yumeyucca.yumebox.presentation.component.Navigator
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import sh.calvin.reorderable.ReorderableItem
@@ -93,9 +94,12 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
 
     LaunchedEffect(Unit) { overrides = manager.otherOverrides() }
     LaunchedEffect(Unit) {
-        while (isActive) {
-            manager.refreshKernelInfo()
-            delay(REFRESH_MS)
+        AppVisibilityTracker.isForeground.collectLatest { foreground ->
+            if (!foreground) return@collectLatest
+            while (true) {
+                manager.refreshKernelInfo()
+                delay(REFRESH_MS)
+            }
         }
     }
     // While a handle is dragged the rows move in these; the chain is written once, on release.

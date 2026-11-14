@@ -102,7 +102,7 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
 
         pollingJob = viewModelScope.launch {
             refreshConnections(showRefreshing = false)
-            PollingTimers.ticks(PollingTimerSpecs.ConnectionsPolling).collect {
+            PollingTimers.foregroundTicks(PollingTimerSpecs.ConnectionsPolling).collect { // KimiNoBox
                 try {
                     refreshConnections(showRefreshing = true)
                 } catch (

@@ -252,7 +252,7 @@ class HomeViewModel(
                     networkInfoService.startIpMonitoring(
                         isProxyActiveFlow = isRunning,
                         externalRefreshFlow =
-                            PollingTimers.ticks(PollingTimerSpecs.HomeIpRefresh).map { Unit },
+                            PollingTimers.foregroundTicks(PollingTimerSpecs.HomeIpRefresh).map { Unit }, // KimiNoBox
                     )
                 } else {
                     flowOf(IpMonitoringState.Loading)
@@ -595,7 +595,7 @@ class HomeViewModel(
 
     private fun startSpeedSampling(sampleLimit: Int = 24) {
         viewModelScope.launch {
-            PollingTimers.ticks(PollingTimerSpecs.HomeSpeedSampling).collect {
+            PollingTimers.foregroundTicks(PollingTimerSpecs.HomeSpeedSampling).collect { // KimiNoBox
                 val snapshot = runtimeSnapshot.value
                 val sample =
                     when {
