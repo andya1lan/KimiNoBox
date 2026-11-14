@@ -38,6 +38,7 @@ import com.github.yumeyucca.yumebox.domain.model.toInfo
 import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.api.CoreApi
 import com.github.yumeyucca.yumebox.runtime.service.R
+import com.github.yumeyucca.yumebox.runtime.service.RuntimeCoordinator
 import com.github.yumeyucca.yumebox.runtime.service.config.ServiceStore
 import com.github.yumeyucca.yumebox.runtime.service.core.CoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.profile.Imported
@@ -95,7 +96,7 @@ class ServiceNotificationManager(
 
     // The initial notification backs startForeground() inside onCreate: any throw before that
     // call crashes the app with a foreground-service contract violation, so this path must
-    // stay free of MMKV/DAO reads. The enriched content follows via the traffic updater.
+    // stay free of MMKV/DAO reads. The enriched content follows via the updater.
     fun createInitialNotification(): Notification =
         buildNotification(
             NotificationPresentationFactory.createStatus(
@@ -104,11 +105,22 @@ class ServiceNotificationManager(
             )
         )
 
-    fun startTrafficUpdate(scope: CoroutineScope): Job =
+    /**
+     * KimiNoBox: the plain notification only names the profile, so it is re-posted on runtime
+     * transitions (start, profile switch) and never polls. The old 1 s ticker cost a profile read
+     * and core IPC every second, and re-posted every ~2 s because the island-only speed field
+     * kept changing. Only the HyperOS Super Island still ticks, since it shows the live speed.
+     * The mode is chosen once per service start.
+     */
+    fun startUpdates(scope: CoroutineScope): Job =
         scope.launch(Dispatchers.IO) {
             try {
-                PollingTimers.ticks(PollingTimerSpecs.ServiceTrafficNotification).collect {
-                    refreshRunningNotification()
+                if (shouldShowTrafficNotification() && isIslandEnabled()) {
+                    PollingTimers.ticks(PollingTimerSpecs.ServiceTrafficNotification).collect {
+                        refreshRunningNotification()
+                    }
+                } else {
+                    RuntimeCoordinator.state.collect { refreshStatusNotification() }
                 }
             } finally {
                 // Cancellation must not skip the restore. A cancelled withLock returns immediately.
@@ -162,6 +174,22 @@ class ServiceNotificationManager(
             profile = profile,
             currentNode = resolveCurrentNode(core),
             trafficNow = now,
+        )
+    }
+
+    private suspend fun refreshStatusNotification() {
+        if (released) return
+        val profileName =
+            resolveProfile()?.name?.takeIf { it.isNotBlank() }
+                ?: YumeTxt.Service.Notification.UnknownProfile
+        if (released) return
+        postPlain(
+            NoticeFrame.Plain(
+                NotificationPresentationFactory.createStatus(
+                    profileName = profileName,
+                    status = YumeTxt.Service.Notification.Running,
+                )
+            )
         )
     }
 

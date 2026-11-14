@@ -58,7 +58,7 @@ class RootForegroundService : Service(), CoroutineScope by CoroutineScope(Dispat
         }
         remoteStartRejected = false
         if (notificationJob?.isActive != true) {
-            notificationJob = notificationManager.startTrafficUpdate(this)
+            notificationJob = notificationManager.startUpdates(this)
         }
         return START_NOT_STICKY
     }

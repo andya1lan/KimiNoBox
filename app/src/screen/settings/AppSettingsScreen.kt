@@ -228,16 +228,17 @@ private fun AppServiceSettingsSection(viewModel: AppSettingsViewModel) {
     Title(YumeTxt.AppSettings.Section.Service)
     AppCard {
         PreferenceSwitchItem(
-            title = YumeTxt.AppSettings.ServiceSection.TrafficNotificationTitle,
-            checked = showTrafficNotification,
-            onCheckedChange = viewModel::onShowTrafficNotificationChange,
-        )
-        PreferenceSwitchItem(
             title = YumeTxt.AppSettings.ServiceSection.ExitUiWhenBackgroundTitle,
             checked = exitUiWhenBackground,
             onCheckedChange = viewModel::onExitUiWhenBackgroundChange,
         )
         if (shizukuAccess.islandSupported) {
+            // KimiNoBox: live traffic only reaches the Super Island; the plain notification is static
+            PreferenceSwitchItem(
+                title = YumeTxt.AppSettings.ServiceSection.TrafficNotificationTitle,
+                checked = showTrafficNotification,
+                onCheckedChange = viewModel::onShowTrafficNotificationChange,
+            )
             PreferenceSwitchItem(
                 title = YumeTxt.AppSettings.ServiceSection.SuperIslandTitle,
                 checked = superIslandEnabled,

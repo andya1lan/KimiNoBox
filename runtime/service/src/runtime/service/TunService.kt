@@ -56,7 +56,7 @@ class TunService : VpnService(), CoroutineScope by CoroutineScope(Dispatchers.De
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (notificationJob?.isActive != true) {
-            notificationJob = notificationManager.startTrafficUpdate(this)
+            notificationJob = notificationManager.startUpdates(this)
         }
         RuntimeCoordinator.onVpnServiceStarted(this)
         // A killed service is recreated with its command; the coordinator adopts it as a start.
