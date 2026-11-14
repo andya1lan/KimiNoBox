@@ -66,6 +66,12 @@
                 android:value="auto_restart_service"/>
         </service>
 
+        <!-- KimiNoBox: restores a runtime the system killed (SelfHeal) -->
+        <service
+            android:name="com.github.yumeyucca.yumebox.runtime.service.SelfHealJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE"/>
+
         <service
             android:name="com.github.yumeyucca.yumebox.runtime.service.WifiAutomationService"
             android:exported="false"

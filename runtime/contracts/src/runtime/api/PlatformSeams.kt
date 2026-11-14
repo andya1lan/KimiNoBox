@@ -50,6 +50,7 @@ enum class RuntimeStartSource {
     AutoRestartReplaced,
     WifiAutomation,
     System,
+    SelfHeal, // KimiNoBox: restore after the system killed the process
 }
 
 /**

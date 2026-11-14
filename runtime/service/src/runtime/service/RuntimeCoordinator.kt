@@ -281,6 +281,7 @@ object RuntimeCoordinator : RuntimeControl {
             }
             publish(owner, mode, RuntimePhase.Running, startedAt = startedAt)
             onRunning(owner)
+            SelfHeal.markRunning(context) // KimiNoBox
         } catch (error: CancellationException) {
             withContext(NonCancellable) {
                 if (!keepServingRoot(swapsRoot, previous, lastError = null)) {
@@ -343,6 +344,7 @@ object RuntimeCoordinator : RuntimeControl {
     }
 
     private suspend fun stopLocked(reason: String?) {
+        SelfHeal.markStopped(context) // KimiNoBox: every stop is on purpose
         val current = _state.value
         if (current.owner == RuntimeOwner.None) {
             if (reason != null) publish(RuntimeOwner.None, current.mode, RuntimePhase.Idle, lastError = reason)
@@ -506,6 +508,7 @@ object RuntimeCoordinator : RuntimeControl {
 
     private fun fail(mode: RunMode, message: String) {
         Timber.tag(TAG).e("%s runtime failed: %s", mode, message)
+        SelfHeal.markStopped(context) // KimiNoBox: no retry loop on a broken profile
         RuntimeFailureRecord.save(mode, message)
         publish(RuntimeOwner.None, mode, RuntimePhase.Failed, lastError = message)
     }

@@ -62,6 +62,8 @@ class AutoRestartService : Service() {
         const val EXTRA_REASON = "auto_restart_reason"
         const val REASON_BOOT_COMPLETED = "boot_completed"
         const val REASON_PACKAGE_REPLACED = "package_replaced"
+        const val REASON_SELF_HEAL = "self_heal" // KimiNoBox: see SelfHeal
+        const val EXTRA_DETAIL = "auto_restart_detail"
         private const val ACTIVATION_TIMEOUT_MS = 60_000L
     }
 
@@ -97,9 +99,10 @@ class AutoRestartService : Service() {
         AutoStartExecutionGate.markStarted(serviceCache)
 
         val reason = intent?.getStringExtra(EXTRA_REASON).orEmpty().ifBlank { "unknown" }
+        val detail = intent?.getStringExtra(EXTRA_DETAIL)?.let { " $it" }.orEmpty()
         autoStartJob = serviceScope.launch {
             try {
-                runCatching { checkAndAutoStart(reason) }
+                runCatching { checkAndAutoStart(reason, detail) }
                     .onFailure { error ->
                         Timber.tag(TAG).e(error, "Auto start failed: ${error.message}")
                     }
@@ -129,12 +132,15 @@ class AutoRestartService : Service() {
         ServiceCompat.startForeground(this, NOTIFICATION_ID, createNotification(), type)
     }
 
-    private suspend fun checkAndAutoStart(reason: String) {
+    private suspend fun checkAndAutoStart(reason: String, detail: String) {
         val runMode = networkSettingsStorage.runMode.value
         val log = RuntimeLog.writer(this, runMode)
+        // KimiNoBox: a runtime left running in this boot comes back even with auto start off, the
+        // same way after a system kill as after an APK replace. Read before the root stop below.
+        val restore = SelfHeal.isExpected(this)
         // This line is the first evidence that the broadcast reached the app. If a boot is not
         // logged at all, the process was never started (on MIUI/HyperOS: autostart not allowed).
-        log.i(RuntimeLog.Type.AutoStart, "check reason=$reason mode=$runMode")
+        log.i(RuntimeLog.Type.AutoStart, "check reason=$reason mode=$runMode restore=$restore$detail")
         if (XiaomiAutoStart.isSupported()) {
             log.i(
                 RuntimeLog.Type.AutoStart,
@@ -151,7 +157,7 @@ class AutoRestartService : Service() {
         ) {
             RuntimeCoordinator.stop()
         }
-        if (!appSettingsStorage.automaticRestart.value) {
+        if (!restore && !appSettingsStorage.automaticRestart.value) {
             log.skip("automatic restart is disabled")
             return
         }
@@ -190,22 +196,24 @@ class AutoRestartService : Service() {
             when (reason) {
                 REASON_BOOT_COMPLETED -> RuntimeStartSource.AutoRestartBoot
                 REASON_PACKAGE_REPLACED -> RuntimeStartSource.AutoRestartReplaced
+                REASON_SELF_HEAL -> RuntimeStartSource.SelfHeal
                 else -> RuntimeStartSource.AutoRestart
             }
+        // The start begins a fresh runtime log, so the lines below repeat the detail.
         try {
             withTimeout(ACTIVATION_TIMEOUT_MS) { RuntimeCoordinator.start(runMode, source) }
         } catch (error: TimeoutCancellationException) {
             RuntimeCoordinator.stop()
-            log.e(RuntimeLog.Type.AutoStart, "timeout reason=$reason mode=$runMode")
+            log.e(RuntimeLog.Type.AutoStart, "timeout reason=$reason mode=$runMode$detail")
             throw IllegalStateException("runtime activation timed out", error)
         } catch (error: CancellationException) {
             throw error
         } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
-            log.e(RuntimeLog.Type.AutoStart, "failed reason=$reason error=${error.message}")
+            log.e(RuntimeLog.Type.AutoStart, "failed reason=$reason error=${error.message}$detail")
             throw error
         }
         if (RuntimeCoordinator.state.value.phase == RuntimePhase.Running) {
-            log.i(RuntimeLog.Type.AutoStart, "success: running reason=$reason mode=$runMode")
+            log.i(RuntimeLog.Type.AutoStart, "success: running reason=$reason mode=$runMode$detail")
             Timber.tag(TAG)
                 .i("Auto start active: reason=$reason profile=${activeProfile.name}, mode=$runMode")
         }

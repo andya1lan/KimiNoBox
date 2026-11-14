@@ -35,6 +35,7 @@ import com.github.yumeyucca.yumebox.di.appModule
 import com.github.yumeyucca.yumebox.feature.meta.presentation.util.CustomRoutingBootstrapper
 import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
+import com.github.yumeyucca.yumebox.runtime.service.SelfHeal
 import com.github.yumeyucca.yumebox.screen.settings.MoeWallpaperImporter
 import com.tencent.mmkv.MMKV
 import kotlinx.coroutines.*
@@ -83,6 +84,8 @@ class App : Application() {
         val featureStore: FeatureStore = koinApp.koin.get()
         featureStore.syncAppVersion(BuildInfo.VERSION_CODE)
         scheduleDeferredStartupTasks(koinApp.koin, appSettingsStorage)
+        // KimiNoBox: whatever started this process, bring back a runtime the system killed
+        SelfHeal.onProcessStart(this)
 
         PlatformIdentifier.getPlatformIdentifier()
     }
