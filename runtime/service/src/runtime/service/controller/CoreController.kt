@@ -639,7 +639,9 @@ class CoreController(
             title = name,
             subtitle = "",
             type = type,
-            delay = history.lastOrNull()?.delay ?: 0,
+            // KimiNoBox: a last probe that failed (the core records 0) reads as a timeout, so a
+            // health check that lost the node replaces the old delay instead of hiding behind it
+            delay = history.lastOrNull()?.let { last -> if (last.delay > 0) last.delay else -1 } ?: 0,
         )
 
     private fun buildGroup(
