@@ -85,6 +85,7 @@ internal fun LazyListScope.nodeGridItems(
     keyPrefix: String = "", // KimiNoBox: keeps keys unique when a list shows several runs
     onOpenGroup: ((String) -> Unit)? = null, // KimiNoBox: group rows open their group
     groupNow: Map<String, String> = emptyMap(),
+    groupLeaf: Map<String, String> = emptyMap(),
 ) {
     val keys = nodeItemKeys(proxies, keyPrefix) // KimiNoBox
     itemsIndexed(
@@ -107,6 +108,7 @@ internal fun LazyListScope.nodeGridItems(
                     ),
             onOpenGroup = onOpenGroup?.takeIf { proxy.isGroup }?.let { open -> { open(proxy.name) } },
             groupNow = groupNow[proxy.name],
+            delayName = groupLeaf[proxy.name].takeIf { proxy.isGroup },
         )
     }
 }

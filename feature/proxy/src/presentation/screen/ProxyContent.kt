@@ -90,4 +90,6 @@ internal data class ProxyNodePageState(
     val onOpenGroup: ((from: String, to: String) -> Unit)? = null,
     /** KimiNoBox: what each group uses now, for the group rows' open buttons. */
     val groupNow: Map<String, String> = emptyMap(),
+    /** KimiNoBox: the node each group ends at through its selections, whose delay a group row shows. */
+    val groupLeaf: Map<String, String> = emptyMap(),
 )

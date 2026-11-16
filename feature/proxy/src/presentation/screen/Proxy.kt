@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.model.ProxySortMode
 import com.github.yumeyucca.yumebox.domain.model.ProxyGroupInfo
+import com.github.yumeyucca.yumebox.domain.model.resolveTerminalProxy
 import com.github.yumeyucca.yumebox.presentation.component.GlassScaffold
 import com.github.yumeyucca.yumebox.presentation.component.LocalDetailNavigator
 import com.github.yumeyucca.yumebox.presentation.screen.node.NodeActionsMenu
@@ -257,6 +258,10 @@ private fun ProxyPageShell(
             }
             // KimiNoBox: a node row that is a group opens it (ProxyNodePage)
             val groupNow = remember(proxyGroups) { proxyGroups.associate { it.name to it.now } }
+            val groupLeaf =
+                remember(proxyGroups) {
+                    proxyGroups.associate { it.name to (proxyGroups.resolveTerminalProxy(it.now)?.name ?: it.now) }
+                }
             val currentState by rememberUpdatedState(state)
             val openGroup: (String, String) -> Unit =
                 remember(coroutineScope) {
@@ -279,6 +284,7 @@ private fun ProxyPageShell(
                     searchVisible = nodeSearchVisible,
                     onOpenGroup = openGroup,
                     groupNow = groupNow,
+                    groupLeaf = groupLeaf,
                 )
             val onSearchQueryChange: (String) -> Unit = { state.nodeSearchQuery = it }
             Box(modifier = Modifier.fillMaxSize().nestedScroll(state.tabCollapseState.nestedScrollConnection)) {

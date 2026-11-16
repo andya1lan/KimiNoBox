@@ -261,6 +261,7 @@ internal fun NodeCard(
     // KimiNoBox: a row that is itself a group gets its own way in, labelled with what the group uses now
     onOpenGroup: (() -> Unit)? = null,
     groupNow: String? = null,
+    delayName: String? = null, // KimiNoBox: whose live delay the chip shows (a group row: its selected node)
 ) {
     val spacing = AppTheme.spacing
     val sizes = AppTheme.sizes
@@ -287,6 +288,7 @@ internal fun NodeCard(
                 showCountryFlag = showCountryFlag,
                 onOpenGroup = onOpenGroup,
                 groupNow = groupNow,
+                delayName = delayName,
             )
         } else {
             val tags = remember(proxy.name) { extractNodeTags(proxy.name) }
@@ -324,6 +326,7 @@ internal fun NodeCard(
                             proxy = proxy,
                             isDelayTesting = isDelayTesting,
                             onTestClick = onTestClick,
+                            delayName = delayName,
                         )
                     }
                 }
@@ -384,6 +387,7 @@ private fun NodeCompactCardContent(
     showCountryFlag: Boolean,
     onOpenGroup: (() -> Unit)?,
     groupNow: String?,
+    delayName: String?,
 ) {
     val spacing = AppTheme.spacing
     val iconLabel = remember(proxy.type) { iconLabel(proxy.type) }
@@ -431,6 +435,7 @@ private fun NodeCompactCardContent(
                     proxy = proxy,
                     isDelayTesting = isDelayTesting,
                     onTestClick = onTestClick,
+                    delayName = delayName,
                 )
             }
         }
@@ -478,8 +483,14 @@ private fun LiveNodeLatencyChip(
     proxy: Proxy,
     isDelayTesting: Boolean,
     onTestClick: ((String) -> Unit)?,
+    delayName: String? = null,
 ) {
-    val latency = rememberNodeDelayLabel(proxy)
+    val latency =
+        if (delayName == null) {
+            rememberNodeDelayLabel(proxy)
+        } else {
+            nodeLatencyLabel(rememberLiveNodeDelay(delayName, proxy.delay))
+        }
     NodeLatencyChip(
         label = latency.text,
         color = latency.color,

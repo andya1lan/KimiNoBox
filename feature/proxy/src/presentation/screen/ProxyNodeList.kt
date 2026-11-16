@@ -83,7 +83,16 @@ internal fun ProxyNodePage(
     val listState = page.listState
     val topOverlayInset = page.topOverlayInset
     val delayTestProgress = proxyViewModel.delayTestProgress
-    val onTestProxyDelay = proxyViewModel::testProxyDelay
+    // KimiNoBox: a group row's delay test runs that group like the group list does, so the nodes
+    // inside get their own fresh values and the row, which shows its selected node, matches them
+    val onTestProxyDelay: (String) -> Unit =
+        remember(proxyViewModel, group.proxies) {
+            val memberGroups = group.proxies.filter { it.isGroup }.mapTo(HashSet()) { it.name }
+            val test: (String) -> Unit = { name ->
+                if (name in memberGroups) proxyViewModel.testDelay(name) else proxyViewModel.testProxyDelay(name)
+            }
+            test
+        }
     val onSelectProxy: (groupName: String, proxyName: String) -> Unit = proxyViewModel::selectProxy
     val spacing = AppTheme.spacing
     val visibleProxies = remember(group.proxies, searchQuery) { group.filterNodes(searchQuery) }
@@ -107,6 +116,8 @@ internal fun ProxyNodePage(
     val onOpenGroup: ((String) -> Unit)? =
         remember(group.name, pageOpenGroup) { pageOpenGroup?.let { open -> { name: String -> open(group.name, name) } } }
     val groupNow = page.groupNow
+    val groupLeaf = page.groupLeaf
+    val testingNames = remember(testingProxyNames, testingGroupNames) { testingProxyNames + testingGroupNames }
 
     GroupDelayTestGridAnchor(
         gridState = resolvedGridState,
@@ -179,13 +190,14 @@ internal fun ProxyNodePage(
                         isSelected = proxy.name == group.now,
                         onClick = nodeClick,
                         onTestClick = onTestProxyDelay,
-                        isDelayTesting = testingProxyNames.contains(proxy.name),
+                        isDelayTesting = testingNames.contains(proxy.name),
                         showCountryFlag = true,
                         compact = true,
                         // 网格不能用 verticalArrangement:折叠为 0 高度的前置项也会各占一份行距。
                         modifier = Modifier.fillMaxWidth().animateItem().padding(vertical = UiDp.dp5),
                         onOpenGroup = onOpenGroup?.takeIf { proxy.isGroup }?.let { open -> { open(proxy.name) } },
                         groupNow = groupNow[proxy.name],
+                        delayName = groupLeaf[proxy.name].takeIf { proxy.isGroup },
                     )
                 }
             }
@@ -224,12 +236,13 @@ internal fun ProxyNodePage(
                 selectedProxyName = group.now,
                 onProxyClick = nodeClick,
                 onProxyTest = onTestProxyDelay,
-                testingProxyNames = testingProxyNames,
+                testingProxyNames = testingNames,
                 outerHorizontalPadding = UiDp.dp0,
                 itemVerticalPadding = UiDp.dp5,
                 keyPrefix = if (sections == null) "" else "$index/",
                 onOpenGroup = onOpenGroup,
                 groupNow = groupNow,
+                groupLeaf = groupLeaf,
             )
         }
     }

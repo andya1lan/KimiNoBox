@@ -147,9 +147,11 @@ private class GroupDelayIndex(private val groups: List<ProxyGroupInfo>) {
 
     fun displayedMemberDelay(proxy: Proxy): Int {
         if (!proxy.isProxyGroup && !isGroupName(proxy.name)) return proxy.delay
-        if (proxy.delay > 0) return proxy.delay
+        // KimiNoBox: a group member shows what its selected node measures before its own last probe,
+        // so the row agrees with the node inside the group
         val selected = selectedLeafDelay(proxy.name)
-        if (selected > 0) return selected
+        if (selected != 0) return selected
+        if (proxy.delay > 0) return proxy.delay
         val measured = measuredLeafDelay(proxy.name)
         if (measured != null && measured > 0) return measured
         if (proxy.delay < 0 || selected < 0 || (measured != null && measured < 0)) return -1
