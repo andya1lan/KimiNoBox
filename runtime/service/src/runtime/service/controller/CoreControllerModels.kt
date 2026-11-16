@@ -59,7 +59,8 @@ internal data class RawProxy(
     val udp: Boolean = false,
 )
 
-@Serializable internal data class RawDelay(val delay: Int = 0)
+/** One entry of a node's delay history; [time] is when the core tested it (RFC 3339). */
+@Serializable internal data class RawDelay(val time: String? = null, val delay: Int = 0)
 
 @Serializable internal data class RawDelayResult(val delay: Int = 0)
 

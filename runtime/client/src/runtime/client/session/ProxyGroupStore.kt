@@ -158,7 +158,11 @@ internal class ProxyGroupStore(
                 now = overlay.mergeNow(group.name, group.now.trim()),
                 proxies =
                     group.proxies.map { proxy ->
-                        val previousDelay = previousByProxy?.get(proxy.name)?.delay
+                        // KimiNoBox: only a member the core left undescribed (provider nodes not in
+                        // yet) keeps its last delay; a described node reporting 0 has no test in the
+                        // freshness window, and showing the old delay would hide that
+                        val previousDelay =
+                            previousByProxy?.get(proxy.name)?.delay?.takeIf { proxy.type == Proxy.Type.Unknown }
                         proxy.copy(
                             delay =
                                 overlay.mergeDelay(

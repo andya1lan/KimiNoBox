@@ -633,15 +633,13 @@ class CoreController(
             missCount = extra?.missCount ?: 0L,
         )
 
-    private fun RawProxy.toProxy(): Proxy =
+    private fun RawProxy.toProxy(nowMillis: Long): Proxy =
         Proxy(
             name = name,
             title = name,
             subtitle = "",
             type = type,
-            // KimiNoBox: a last probe that failed (the core records 0) reads as a timeout, so a
-            // health check that lost the node replaces the old delay instead of hiding behind it
-            delay = history.lastOrNull()?.let { last -> if (last.delay > 0) last.delay else -1 } ?: 0,
+            delay = lastDelay(history, nowMillis), // KimiNoBox
         )
 
     private fun buildGroup(
@@ -649,9 +647,10 @@ class CoreController(
         nodes: Map<String, RawProxy>,
         sort: ProxySort,
     ): ProxyGroup {
+        val now = System.currentTimeMillis() // KimiNoBox
         val members =
             group.all.map { memberName ->
-                nodes[memberName]?.toProxy()
+                nodes[memberName]?.toProxy(now)
                     ?: Proxy(
                         name = memberName,
                         title = memberName,
