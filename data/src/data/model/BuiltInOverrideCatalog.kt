@@ -66,6 +66,13 @@ object BuiltInOverrideCatalog {
                 contentType = OverrideContentType.Yaml,
                 nameProvider = { YumeTxt.Override.BuiltIn.Acl4ssrOnlineFull },
             ),
+            // KimiNoBox: allow-lan on 7890 for devices on the phone's hotspot, ticked only while sharing
+            BuiltInOverrideDefinition(
+                id = "${OverrideInternalConstants.BUILTIN_OVERRIDE_PREFIX}hotspot-share",
+                assetPath = "$ASSET_DIR/hotspot_share.yaml",
+                contentType = OverrideContentType.Yaml,
+                nameProvider = { "热点共享" },
+            ),
         )
 
     fun find(id: String): BuiltInOverrideDefinition? = all.firstOrNull { it.id == id }
