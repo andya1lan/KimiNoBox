@@ -27,6 +27,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
@@ -248,8 +251,8 @@ fun MoeHomePage(
         }
     }
 
-    // The long press, the palette entry and the edit sheet's wallpaper tile all land in the
-    // appearance editor itself; picking a picture happens from the editor's own tool row.
+    // The long press and the palette entry land in the appearance editor itself; picking a picture
+    // happens from the editor's own tool row (or straight from the edit sheet, below).
     val openWallpaperEditor: () -> Unit =
         remember(rootNavigator, wallpaperUri, wallpaperZoom, wallpaperBiasX, wallpaperBiasY) {
             {
@@ -262,6 +265,16 @@ fun MoeHomePage(
                     ),
                 )
             }
+        }
+    // KimiNoBox: the edit sheet's wallpaper entry opens the photo picker straight away, as before 0.7;
+    // the picked picture then lands in the editor for cropping
+    val wallpaperPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            rootNavigator.push(Route.MoeWallpaperCrop(wallpaperUri = uri.toString()))
         }
     val homeSidebarIcons =
         remember(onOpenPanel, handlePageChange, openSettingsPage, openWallpaperEditor) {
@@ -342,7 +355,7 @@ fun MoeHomePage(
         },
         onOpenWallpaper = {
             showHomeSettingsSheet = false
-            openWallpaperEditor()
+            wallpaperPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         },
         onDismiss = { showHomeSettingsSheet = false },
     )

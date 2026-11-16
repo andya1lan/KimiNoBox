@@ -137,7 +137,8 @@ fun MoeWallpaperCropScreen(
 
     // A blank source previews the bundled wallpaper, exactly as the home page falls back to it.
     var wallpaperSource by remember { mutableStateOf(wallpaperUri) }
-    var followSystemWallpaper by remember { mutableStateOf(useSystemWallpaper) }
+    // KimiNoBox: a picture picked on the home page arrives as a new source, and picking one means using it
+    var followSystemWallpaper by remember { mutableStateOf(useSystemWallpaper && wallpaperUri == storedWallpaperUri) }
     var zoom by remember { mutableFloatStateOf(initialZoom.coerceIn(1f, 5f)) }
     var biasX by remember { mutableFloatStateOf(initialBiasX.coerceIn(-1f, 1f)) }
     var biasY by remember { mutableFloatStateOf(initialBiasY.coerceIn(-1f, 1f)) }
