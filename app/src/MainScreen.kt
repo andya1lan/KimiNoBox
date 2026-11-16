@@ -48,6 +48,7 @@ import com.github.yumeyucca.yumebox.screen.moe.MoeHomePage
 import com.github.yumeyucca.yumebox.screen.profiles.ProfilesPager
 import com.github.yumeyucca.yumebox.screen.rules.RulesProvidersTab
 import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
+import com.github.yumeyucca.yumebox.screen.settings.SettingPager
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import timber.log.Timber
@@ -277,6 +278,11 @@ internal fun MainRootPageContent(state: MainRootPageState) {
 
         BottomBarDestination.Config -> {
             ProfilesPager(state.mainInnerPadding)
+        }
+
+        // KimiNoBox: settings stays a tab (the floating bar's padding comes from StandalonePageList)
+        BottomBarDestination.Setting -> {
+            SettingPager()
         }
     }
 }

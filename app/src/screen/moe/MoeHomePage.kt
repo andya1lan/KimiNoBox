@@ -51,7 +51,6 @@ import com.github.yumeyucca.yumebox.data.store.AppSettingsStore // KimiNoBox
 import com.github.yumeyucca.yumebox.domain.model.TrafficData
 import com.github.yumeyucca.yumebox.presentation.component.AppMarkdownDialog
 import com.github.yumeyucca.yumebox.presentation.component.BottomBarDestination
-import com.github.yumeyucca.yumebox.presentation.component.LocalDetailNavigator
 import com.github.yumeyucca.yumebox.presentation.component.LocalHandlePageChange
 import com.github.yumeyucca.yumebox.presentation.component.LocalNavigator
 import com.github.yumeyucca.yumebox.presentation.component.WindowLayoutMode
@@ -199,14 +198,9 @@ fun MoeHomePage(
     )
     val handlePageChange = LocalHandlePageChange.current
     val rootNavigator = LocalNavigator.current
-    val detailNavigator = LocalDetailNavigator.current
-    // Settings is no longer a pager tab: the sidebar entry pushes it as a standalone page
-    // (replacing the detail pane inside the tablet shell).
+    // KimiNoBox: settings is a pager tab again, like the bottom bar's
     val openSettingsPage: () -> Unit =
-        remember(rootNavigator, detailNavigator) {
-            val targetNavigator = detailNavigator ?: rootNavigator
-            { targetNavigator.push(Route.Settings) }
-        }
+        remember(handlePageChange) { { handlePageChange(BottomBarDestination.Setting) } }
     val quoteText = moe.moeHomeQuote.ifBlank { AppSettingsStore.DEFAULT_HOME_QUOTE } // KimiNoBox
     val animatedSidebarToggleProgress by
         animateFloatAsState(

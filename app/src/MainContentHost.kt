@@ -103,7 +103,6 @@ internal fun MainContentHost(
                         mainPagerState = mainPagerState,
                         pagerFlingBehavior = pagerFlingBehavior,
                         tabs = tabs,
-                        bottomBarVisible = bottomBarVisible,
                         home = home,
                         onOpenPanel = onOpenPanel,
                     )
@@ -169,7 +168,6 @@ internal fun MainContentHost(
                 mainPagerState = mainPagerState,
                 pagerFlingBehavior = pagerFlingBehavior,
                 tabs = tabs,
-                bottomBarVisible = bottomBarVisible,
                 home = home,
                 onOpenPanel = onOpenPanel,
             )
@@ -215,7 +213,6 @@ private fun MainPagerHost(
     mainPagerState: MainPagerState,
     pagerFlingBehavior: TargetedFlingBehavior,
     tabs: BottomBarTabs,
-    bottomBarVisible: Boolean,
     home: MoeHomeFrame,
     onOpenPanel: () -> Unit,
 ) {
@@ -252,10 +249,7 @@ private fun MainPagerHost(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Bottom,
         ) {
-            BottomBarContent(
-                isVisible = bottomBarVisible,
-                destinations = tabs.visible,
-            )
+            BottomBarContent(destinations = tabs.visible)
         }
     }
 }

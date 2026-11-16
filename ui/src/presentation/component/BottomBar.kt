@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.ArrowDownUp
+import com.github.yumeyucca.yumebox.presentation.icon.yume.Bolt
 import com.github.yumeyucca.yumebox.presentation.icon.yume.House
 import com.github.yumeyucca.yumebox.presentation.icon.yume.PackageCheck
 import com.github.yumeyucca.yumebox.presentation.theme.AnimationSpecs
@@ -67,12 +68,13 @@ import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.glass.GlassNavigationBar
-import top.yukonga.miuix.kmp.glass.GlassNavigationItem
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private const val BottomBarLayoutAnimationDurationMillis = 380
 private const val ProxyDestinationRevealDurationMillis = 300
+
+// KimiNoBox: share of the swipe off the home page after which the bar is fully up
+private const val HomeRevealFraction = 0.6f
 
 object MainBottomBarDefaults {
     // NexioSchedule-aligned capsule sizing: each tab owns 21% of the screen width, so the pill
@@ -127,20 +129,23 @@ fun rememberBottomBarReservedHeight(): Dp {
                 )
                 .toDp()
         }
-    return remember(systemBottomInset) {
-        MainBottomBarDefaults.BarHeight +
-            maxOf(
-                systemBottomInset + MainBottomBarDefaults.InsetBreathingRoom,
-                MainBottomBarDefaults.MinFloatingBottomGap,
-            )
+    // KimiNoBox: the liquid glass bar (LiquidGlassTabBar.kt) is taller and keeps its own gap
+    val liquid = isRuntimeShaderSupported()
+    return remember(systemBottomInset, liquid) {
+        if (liquid) {
+            LiquidGlassTabBarDefaults.ReservedHeight + systemBottomInset
+        } else {
+            MainBottomBarDefaults.BarHeight +
+                maxOf(
+                    systemBottomInset + MainBottomBarDefaults.InsetBreathingRoom,
+                    MainBottomBarDefaults.MinFloatingBottomGap,
+                )
+        }
     }
 }
 
 @Composable
-fun BottomBarContent(
-    isVisible: Boolean = true,
-    destinations: List<BottomBarDestination> = BottomBarDestination.entries,
-) {
+fun BottomBarContent(destinations: List<BottomBarDestination> = BottomBarDestination.entries) {
     val bottomBarScrollBehavior = LocalBottomBarScrollBehavior.current
     val mainPagerState = LocalMainPagerState.current
     val pagerState = mainPagerState.pagerState
@@ -163,7 +168,18 @@ fun BottomBarContent(
                 )
             }
         }
-    val bottomBarVisible = isVisible && (bottomBarScrollBehavior?.isBottomBarVisible ?: true)
+    // KimiNoBox: the bar rises with the swipe off the home page (page 0, which has its own chrome)
+    // instead of sliding in after the pager settles; it is fully up after HomeRevealFraction of the swipe
+    val pagerReveal =
+        remember(pagerState) {
+            derivedStateOf {
+                ((pagerState.currentPage + pagerState.currentPageOffsetFraction) / HomeRevealFraction).coerceIn(0f, 1f)
+            }
+        }
+    val offHome by remember(pagerReveal) { derivedStateOf { pagerReveal.value > 0.5f } }
+    // The scroll auto-hide keeps its own slide; the swipe drives the rest.
+    val scrollVisible = bottomBarScrollBehavior?.isBottomBarVisible ?: true
+    val bottomBarVisible = offHome && scrollVisible
     // The proxy tab fades in the first time it becomes available; it only starts revealed once the
     // destination list contains it, so the fade also plays when a layout switch adds it later.
     var proxyTabRevealed by remember { mutableStateOf(false) }
@@ -175,7 +191,7 @@ fun BottomBarContent(
     val exitOffsetPx = remember(density) { with(density) { MainBottomBarDefaults.ExitOffset.toPx() } }
     // One transition drives both halves of the hide/show transform: as separate drivers, the fade and
     // the slide could be started by different effects and settle a frame apart.
-    val visibility = updateTransition(targetState = bottomBarVisible, label = "bottom_bar_visibility")
+    val visibility = updateTransition(targetState = scrollVisible, label = "bottom_bar_visibility")
     val animatedAlpha by
         visibility.animateFloat(
             transitionSpec = {
@@ -252,28 +268,37 @@ fun BottomBarContent(
             label = "bottom_bar_width_fraction",
         )
 
-    // Both capsules share the same placement, width and hide/show transform; only the body differs.
-    val barModifier =
-        Modifier.fillMaxWidth(widthFraction).padding(bottom = bottomGap).graphicsLayer {
-            alpha = animatedAlpha
-            translationY = exitProgress * exitOffsetPx
+    val barTransform =
+        Modifier.graphicsLayer {
+            val reveal = pagerReveal.value
+            alpha = animatedAlpha * reveal
+            translationY = maxOf(exitProgress, 1f - reveal) * exitOffsetPx
         }
 
+    // KimiNoBox: the liquid glass bar from before the 0.7 merge, with every page including the home
+    // page and settings; upstream's GlassNavigationBar is frosted only
     if (glassBackdrop != null && isRuntimeShaderSupported()) {
-        GlassNavigationBar(
-            items = tabs.map { GlassNavigationItem(icon = it.icon, label = it.label) },
-            selectedIndex = tabIndex,
-            onSelect = { index -> tabs.getOrNull(index)?.let(onItemClick) },
+        LiquidGlassTabBar(
+            destinations = destinations,
+            selectedIndex = mainPagerState.selectedPage,
+            enabled = bottomBarVisible,
             backdrop = glassBackdrop,
-            height = MainBottomBarDefaults.BarHeight,
-            selectedColor = selectedColor,
-            unselectedColor = unselectedColor,
-            indicatorColor = indicatorContainerColor,
-            indicatorPressedColor = selectedColor.copy(alpha = opacity.subtle * 2f),
-            modifier = barModifier,
+            // The bar follows selectedPage, so a tap retargets even mid-navigation
+            onTabClick = { index -> destinations.getOrNull(index)?.let(onItemClick) },
+            modifier =
+                Modifier.padding(
+                        start = LiquidGlassTabBarDefaults.HorizontalPadding,
+                        end = LiquidGlassTabBarDefaults.HorizontalPadding,
+                        top = LiquidGlassTabBarDefaults.TopPadding,
+                        bottom = bottomSafeInset + LiquidGlassTabBarDefaults.BottomPadding,
+                    )
+                    .then(barTransform),
         )
         return
     }
+
+    // Both capsules share the same placement, width and hide/show transform; only the body differs.
+    val barModifier = Modifier.fillMaxWidth(widthFraction).padding(bottom = bottomGap).then(barTransform)
 
     BottomNavigationBar(
         indicatorProgress = indicatorProgress,
@@ -483,7 +508,8 @@ private fun BottomNavigationIndicator(
 enum class BottomBarDestination(val icon: ImageVector) {
     Home(Yume.House),
     Proxy(Yume.ArrowDownUp),
-    Config(Yume.PackageCheck);
+    Config(Yume.PackageCheck),
+    Setting(Yume.Bolt); // KimiNoBox: settings stays a tab
 
     val label: String
         get() =
@@ -491,5 +517,6 @@ enum class BottomBarDestination(val icon: ImageVector) {
                 Home -> YumeTxt.Component.BottomBar.Home
                 Proxy -> YumeTxt.Component.BottomBar.Proxy
                 Config -> YumeTxt.Component.BottomBar.Config
+                Setting -> YumeTxt.Component.BottomBar.Setting
             }
 }

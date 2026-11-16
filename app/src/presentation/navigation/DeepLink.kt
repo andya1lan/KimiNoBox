@@ -46,7 +46,7 @@ internal fun deepLinkOf(uri: Uri): DeepLink? =
                 "home" -> DeepLink.Page(BottomBarDestination.Home)
                 "proxy" -> DeepLink.Page(BottomBarDestination.Proxy)
                 "profiles" -> DeepLink.Page(BottomBarDestination.Config)
-                "settings" -> DeepLink.Screen(Route.Settings)
+                "settings" -> DeepLink.Page(BottomBarDestination.Setting) // KimiNoBox: a tab again
                 else -> null
             }
 
