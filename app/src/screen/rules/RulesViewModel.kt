@@ -25,6 +25,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.yumeyucca.yumebox.core.model.RuntimeRule
 import com.github.yumeyucca.yumebox.runtime.client.access.RuntimeAccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -36,10 +37,8 @@ data class RulesUiState(
     val rules: List<RuntimeRule> = emptyList(),
     val isLoading: Boolean = true,
     val isRunning: Boolean = false,
-    val error: String? = null,
     val toggleError: String? = null,
     val togglingIndexes: Set<Int> = emptySet(),
-    val searchQuery: String = "",
 )
 
 class RulesViewModel(private val appContext: Context) : ViewModel() {
@@ -47,64 +46,43 @@ class RulesViewModel(private val appContext: Context) : ViewModel() {
     val uiState: StateFlow<RulesUiState> = _uiState.asStateFlow()
     private val toggleMutex = Mutex()
 
-    val filteredRules: StateFlow<List<RuntimeRule>> =
-        _uiState
-            .map { state ->
-                val query = state.searchQuery.trim()
-                state.rules.takeIf { query.isEmpty() } ?: state.rules.filter { it.matches(query) }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList(),
-            )
-
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true) }
             runCatching {
                 RuntimeAccess.connect(appContext)
                 RuntimeAccess.core().queryRules()
             }
-                .onSuccess { rules ->
-                    _uiState.update {
-                        it.copy(rules = rules, isLoading = false, isRunning = true, error = null)
-                    }
-                }
+                .onSuccess { rules -> _uiState.update { it.copy(rules = rules, isLoading = false, isRunning = true) } }
                 .onFailure { error ->
+                    // Cancellation must not be published as "runtime not running" with no rules.
+                    if (error is CancellationException) throw error
                     Timber.w(error, "queryRules failed")
                     _uiState.update {
                         it.copy(
                             rules = emptyList(),
                             isLoading = false,
                             isRunning = false,
-                            error = error.message,
                         )
                     }
                 }
         }
     }
 
-    fun setSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-    }
-
     /**
-     * Toggle a single rule. Switch ON means the rule is **enabled** (disabled=false). PATCH
-     * /rules/disable uses { index: disabled }.
+     * Toggle a single rule. Switch ON means the rule is **enabled** (disabled=false). PATCH /rules/disable uses {
+     * index: disabled }.
      */
     fun setRuleEnabled(index: Int, enabled: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             toggleMutex.withLock {
                 val disabled = !enabled
-                val originalRule =
-                    _uiState.value.rules.firstOrNull { it.index == index } ?: return@withLock
+                val originalRule = _uiState.value.rules.firstOrNull { it.index == index } ?: return@withLock
                 _uiState.update { state ->
                     state.copy(
                         rules =
                             state.rules.map { rule ->
-                                rule.takeUnless { it.index == index }
-                                    ?: rule.copy(disabled = disabled)
+                                rule.takeUnless { it.index == index } ?: rule.copy(disabled = disabled)
                             },
                         togglingIndexes = state.togglingIndexes + index,
                         toggleError = null,
@@ -124,13 +102,12 @@ class RulesViewModel(private val appContext: Context) : ViewModel() {
                         }
                     }
                     .onFailure { error ->
+                        // A cancelled toggle must not be rolled back with a bogus error banner.
+                        if (error is CancellationException) throw error
                         Timber.w(error, "setRuleDisabled failed")
                         _uiState.update { state ->
                             state.copy(
-                                rules =
-                                    state.rules.map { rule ->
-                                        rule.takeIf { it.index != index } ?: originalRule
-                                    },
+                                rules = state.rules.map { rule -> rule.takeIf { it.index != index } ?: originalRule },
                                 togglingIndexes = state.togglingIndexes - index,
                                 toggleError = error.message ?: error.javaClass.simpleName,
                             )
@@ -143,10 +120,4 @@ class RulesViewModel(private val appContext: Context) : ViewModel() {
     fun consumeToggleError() {
         _uiState.update { it.copy(toggleError = null) }
     }
-
-    private fun RuntimeRule.matches(query: String): Boolean =
-        payload.contains(query, ignoreCase = true) ||
-                type.contains(query, ignoreCase = true) ||
-                proxy.contains(query, ignoreCase = true) ||
-                index.toString().contains(query)
 }

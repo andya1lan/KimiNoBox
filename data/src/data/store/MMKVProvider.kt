@@ -18,15 +18,10 @@
  *
  */
 
-@file:Suppress("UnusedSymbol")
-
 package com.github.yumeyucca.yumebox.data.store
-
 
 import com.tencent.mmkv.MMKV
 
 class MMKVProvider {
-    fun getDefaultMMKV(): MMKV = MMKV.defaultMMKV()
-
     fun getMMKV(id: String): MMKV = MMKV.mmkvWithID(id, MMKV.MULTI_PROCESS_MODE)
 }

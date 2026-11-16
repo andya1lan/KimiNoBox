@@ -20,7 +20,7 @@
 
 @file:Suppress("FunctionName")
 
-package com.github.yumeyucca.yumebox.presentation.screen
+package com.github.yumeyucca.yumebox.feature.override.presentation.screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
@@ -32,13 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.github.yumeyucca.yumebox.nodesource.NodeText
 import com.github.yumeyucca.yumebox.presentation.component.OemTextField
-import com.github.yumeyucca.yumebox.presentation.component.OverrideFieldAssistText
 import com.github.yumeyucca.yumebox.presentation.component.SmallTopBar
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.Save
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import top.yukonga.miuix.kmp.basic.*
+import androidx.compose.ui.graphics.Color
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -127,5 +128,21 @@ internal fun NodeHint(text: String, modifier: Modifier = Modifier, isError: Bool
         color =
             if (isError) MiuixTheme.colorScheme.error
             else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+    )
+}
+
+/** The support or error line under a form field; upstream's override UiKit had it until it was removed. */
+@Composable
+private fun OverrideFieldAssistText(text: String, color: Color, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MiuixTheme.textStyles.body2,
+        color = color,
+        modifier =
+            modifier.padding(
+                start = AppTheme.spacing.space14,
+                top = AppTheme.spacing.space8,
+                bottom = AppTheme.spacing.space8,
+            ),
     )
 }

@@ -20,6 +20,7 @@
 
 package com.github.yumeyucca.yumebox.core.util
 
+import java.util.regex.Pattern
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.*
 import org.yaml.snakeyaml.DumperOptions
@@ -28,16 +29,8 @@ import org.yaml.snakeyaml.constructor.SafeConstructor
 import org.yaml.snakeyaml.nodes.Tag
 import org.yaml.snakeyaml.representer.Representer
 import org.yaml.snakeyaml.resolver.Resolver
-import java.util.regex.Pattern
 
 object YamlCodec {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-        explicitNulls = false
-        prettyPrint = true
-    }
-
     private fun newYaml(): Yaml {
         val options =
             DumperOptions().apply {
@@ -53,7 +46,7 @@ object YamlCodec {
     }
 
     fun <T> encode(serializer: KSerializer<T>, value: T): String {
-        val element = json.encodeToJsonElement(serializer, value)
+        val element = PrettyPersistedJson.encodeToJsonElement(serializer, value)
         val tree = toYamlNode(element)
         return dumpValue(tree)
     }
@@ -61,7 +54,7 @@ object YamlCodec {
     fun <T> decode(serializer: KSerializer<T>, content: String): T {
         val loaded = loadValue(content)
         val element = toJsonElement(loaded)
-        return json.decodeFromJsonElement(serializer, element)
+        return PrettyPersistedJson.decodeFromJsonElement(serializer, element)
     }
 
     fun dumpMap(value: Map<String, Any?>): String = dumpValue(value)
@@ -87,9 +80,7 @@ object YamlCodec {
         when (element) {
             JsonNull -> null
             is JsonObject ->
-                LinkedHashMap<String, Any?>().apply {
-                    element.forEach { (key, value) -> put(key, toYamlNode(value)) }
-                }
+                LinkedHashMap<String, Any?>().apply { element.forEach { (key, value) -> put(key, toYamlNode(value)) } }
 
             is JsonArray -> element.map(::toYamlNode)
             is JsonPrimitive ->
@@ -128,9 +119,7 @@ object YamlCodec {
             null -> null
             is Map<*, *> ->
                 LinkedHashMap<String, Any?>().apply {
-                    value.forEach { (key, childValue) ->
-                        put(key.toString(), normalizeYamlValue(childValue))
-                    }
+                    value.forEach { (key, childValue) -> put(key.toString(), normalizeYamlValue(childValue)) }
                 }
 
             is Iterable<*> -> value.map(::normalizeYamlValue)

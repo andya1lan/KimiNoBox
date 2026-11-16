@@ -181,35 +181,28 @@ private val countries =
     )
 
 private val countryNameToCode = buildMap {
-    countries.forEach { country ->
-        country.names.forEach { name -> put(name.lowercase(), country.code) }
-    }
+    countries.forEach { country -> country.names.forEach { name -> put(name.lowercase(), country.code) } }
 }
 private val countryNameRegex =
     Regex(
-        countryNameToCode.keys.sortedByDescending(String::length).joinToString("|") {
-            Regex.escape(it)
-        },
+        countryNameToCode.keys.sortedByDescending(String::length).joinToString("|") { Regex.escape(it) },
         RegexOption.IGNORE_CASE,
     )
 private val countryCodes = countries.mapTo(mutableSetOf()) { it.code }
-private val countryCodeAbbreviationRegex = Regex("(?<![A-Za-z])([A-Za-z]{2})(?![A-Za-z])")
+// Both sides exclude digits as well: "LA01"/"ID-1" are node names, not los-angeles/indonesia.
+private val countryCodeAbbreviationRegex = Regex("(?<![A-Za-z0-9])([A-Za-z]{2})(?![A-Za-z0-9])")
 private const val regionalIndicatorBase = 0x1F1E6
 private const val regionalIndicatorEnd = 0x1F1FF
 
 private fun Char.isNameSeparator() = isWhitespace() || this in "-|·•—:"
 
-private fun isRegionalIndicator(codePoint: Int) =
-    codePoint in regionalIndicatorBase..regionalIndicatorEnd
+private fun isRegionalIndicator(codePoint: Int) = codePoint in regionalIndicatorBase..regionalIndicatorEnd
 
 private fun findCountryCodeFromName(name: String) =
     countryNameRegex.find(name)?.value?.lowercase()?.let(countryNameToCode::get)
 
 private fun findCountryCodeAbbreviation(name: String) =
-    countryCodeAbbreviationRegex
-        .findAll(name)
-        .map { it.groupValues[1].uppercase() }
-        .firstOrNull(countryCodes::contains)
+    countryCodeAbbreviationRegex.findAll(name).map { it.groupValues[1].uppercase() }.firstOrNull(countryCodes::contains)
 
 private fun findFlagEmojiCountryCode(text: String): Pair<String, IntRange>? {
     var index = 0

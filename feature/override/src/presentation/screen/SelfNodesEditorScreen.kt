@@ -20,7 +20,7 @@
 
 @file:Suppress("FunctionName")
 
-package com.github.yumeyucca.yumebox.presentation.screen
+package com.github.yumeyucca.yumebox.feature.override.presentation.screen
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -30,7 +30,7 @@ import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditorState
 import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton
-import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
+import com.github.yumeyucca.yumebox.core.model.LanguageScope
 import com.github.yumeyucca.yumebox.nodesource.NodeListYaml
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceProblems
 import com.github.yumeyucca.yumebox.nodesource.NodeText

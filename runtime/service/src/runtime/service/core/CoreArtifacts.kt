@@ -30,11 +30,9 @@ internal object CoreArtifacts {
     const val LIBRARY_NAME = "libmihomocore.so"
     const val LIBRARY_OPTION = "--core-library"
 
-    fun shell(context: Context): File =
-        File(context.applicationInfo.nativeLibraryDir, SHELL_NAME)
+    fun shell(context: Context): File = File(context.applicationInfo.nativeLibraryDir, SHELL_NAME)
 
-    fun previewShell(context: Context): File =
-        File(context.applicationInfo.nativeLibraryDir, PREVIEW_SHELL_NAME)
+    fun previewShell(context: Context): File = File(context.applicationInfo.nativeLibraryDir, PREVIEW_SHELL_NAME)
 
     fun library(context: Context): File {
         // KimiNoBox: remote kernels are disabled; the core is always the bundled locked release
@@ -48,23 +46,20 @@ internal object CoreArtifacts {
         // Keep the untransformed debug APK path working. Release APKs normally move this file
         // into the loader payload, but Android Gradle's ordinary debug packaging may leave it in
         // nativeLibraryDir.
-        File(context.applicationInfo.nativeLibraryDir, LIBRARY_NAME)
-            .takeIf(File::isFile)
-            ?.let { return it }
+        File(context.applicationInfo.nativeLibraryDir, LIBRARY_NAME).takeIf(File::isFile)?.let {
+            return it
+        }
 
         // Alpha remains bundled as the first-run/offline baseline. The payload loader extracts it
         // to app-private storage; remote kernels use the same directory but always take priority.
         return runCatching {
                 val bridge =
                     Class.forName("com.github.yumeyucca.yumebox.loader.PayloadRuntime", false, context.classLoader)
-                bridge
-                    .getMethod("findNativeLibrary", String::class.java)
-                    .invoke(null, LIBRARY_NAME) as? String
+                bridge.getMethod("findNativeLibrary", String::class.java).invoke(null, LIBRARY_NAME) as? String
             }
             .getOrNull()
             ?.let(::File)
-            ?.takeIf(File::isFile)
-            ?: error("Bundled Alpha mihomo core is unavailable")
+            ?.takeIf(File::isFile) ?: error("Bundled Alpha mihomo core is unavailable")
     }
 
     fun arguments(context: Context, coreArgs: Array<String>): Array<String> =

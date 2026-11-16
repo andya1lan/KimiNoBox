@@ -10,8 +10,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.github.yumeyucca.yumebox.presentation.component.PreferenceSwitchItem
+import com.github.yumeyucca.yumebox.common.util.startActivitySafely
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
+import com.github.yumeyucca.yumebox.presentation.component.PreferenceSwitchItem
 
 @Composable
 internal fun SystemWallpaperPreferenceItem(
@@ -31,15 +32,13 @@ internal fun SystemWallpaperPreferenceItem(
         }
 
     DisposableEffect(lifecycleOwner, waitingForAccess) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME &&
-                waitingForAccess &&
-                SystemWallpaperAccess.isGranted(context)
-            ) {
-                waitingForAccess = false
-                currentOnCheckedChange(true)
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME && waitingForAccess && SystemWallpaperAccess.isGranted(context)) {
+                    waitingForAccess = false
+                    currentOnCheckedChange(true)
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
@@ -53,8 +52,7 @@ internal fun SystemWallpaperPreferenceItem(
             } else if (SystemWallpaperAccess.isGranted(context)) {
                 onCheckedChange(true)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                waitingForAccess = true
-                context.startActivity(SystemWallpaperAccess.settingsIntent(context))
+                waitingForAccess = context.startActivitySafely(SystemWallpaperAccess.settingsIntent(context))
             } else {
                 waitingForAccess = true
                 readPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)

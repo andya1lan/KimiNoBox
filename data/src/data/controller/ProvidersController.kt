@@ -22,15 +22,17 @@ package com.github.yumeyucca.yumebox.data.controller
 
 import android.content.Context
 import android.net.Uri
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.model.Provider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class ProvidersController(
     private val context: Context,
@@ -39,14 +41,16 @@ class ProvidersController(
 ) {
     @Suppress("TooGenericExceptionCaught")
     suspend fun queryProviders(): Result<List<Provider>> =
-        try {
-            Result.success(queryProvidersAction())
-        } catch (error: Exception) { // fault barrier: injected bridge action may fail arbitrarily
-            Result.failure(error)
+        withContext(Dispatchers.IO) {
+            try {
+                Result.success(queryProvidersAction())
+            } catch (error: Exception) { // fault barrier: injected bridge action may fail arbitrarily
+                if (error is CancellationException) throw error
+                Result.failure(error)
+            }
         }
 
-    suspend fun updateProvider(provider: Provider): Result<Unit> =
-        updateProviderInternal(provider.type, provider.name)
+    suspend fun updateProvider(provider: Provider): Result<Unit> = updateProviderInternal(provider.type, provider.name)
 
     suspend fun updateAllProviders(providers: List<Provider>): Result<UpdateProvidersResult> {
         if (providers.isEmpty()) return Result.success(UpdateProvidersResult(emptyList()))
@@ -63,7 +67,6 @@ class ProvidersController(
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun uploadProviderFile(
-        context: Context,
         provider: Provider,
         uri: Uri,
         maxBytes: Long = MAX_UPLOAD_SIZE_BYTES,
@@ -75,16 +78,13 @@ class ProvidersController(
                     context.contentResolver.openInputStream(uri)
                         ?: return@withContext Result.failure(IllegalStateException("无法读取文件: $uri"))
 
-                inputStream.use { input ->
-                    copyBoundedAtomic(input, targetFile, maxBytes)
-                }
+                inputStream.use { input -> copyBoundedAtomic(input, targetFile, maxBytes) }
 
                 Result.success(Unit)
-            } catch (
-                error:
-                Exception
-            ) { // fault barrier: IO and path-validation failures both become
-                // Result.failure
+            } catch (error: CancellationException) {
+                throw error
+            } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+                // Fault barrier: IO and path-validation failures both become Result.failure.
                 Result.failure(error)
             }
         }
@@ -96,6 +96,7 @@ class ProvidersController(
             updateProviderAction(type, name)
             Result.success(Unit)
         } catch (error: Exception) { // fault barrier: injected update action may fail arbitrarily
+            if (error is CancellationException) throw error
             Result.failure(error)
         }
 
@@ -111,9 +112,7 @@ class ProvidersController(
                     val read = input.read(buffer)
                     if (read < 0) break
                     written += read.toLong()
-                    check(written <= maxBytes) {
-                        "文件超过 ${maxBytes / (1024 * 1024)}MB 限制"
-                    }
+                    check(written <= maxBytes) { YumeTxt.Override.Import.TooLarge.format(maxBytes / (1024 * 1024)) }
                     output.write(buffer, 0, read)
                 }
                 output.fd.sync()
@@ -145,14 +144,12 @@ class ProvidersController(
         val importedRoot = context.filesDir.resolve("imported").canonicalFile
         val inImportedProviders =
             targetFile.toPath().startsWith(importedRoot.toPath()) &&
-                    targetFile
-                        .toRelativeString(importedRoot)
-                        .replace('\\', '/')
-                        .matches(Regex("""^[^/]+/providers/(rules|proxies)/.+"""))
+                targetFile
+                    .toRelativeString(importedRoot)
+                    .replace('\\', '/')
+                    .matches(Regex("""^[^/]+/providers/(rules|proxies)/.+"""))
         if (!inImportedProviders) {
-            throw IllegalStateException(
-                "Provider path must live under profile provider directories: ${provider.path}"
-            )
+            throw IllegalStateException("Provider path must live under profile provider directories: ${provider.path}")
         }
         targetFile.parentFile?.mkdirs()
         return targetFile

@@ -156,14 +156,16 @@ class LogViewModel(
     data class LogScreenState(
         val filteredEntries: List<LiveLogEntry> = emptyList(),
         val levelFilter: LogLevelFilter = LogLevelFilter.All,
+        val searchQuery: String = "",
         val connectionState: LogConnectionState = LogConnectionState.Connecting,
     )
 
     val screenState: StateFlow<LogScreenState> =
-        combine(filteredLogEntries, levelFilter, connectionState) { entries, filter, connection ->
+        combine(filteredLogEntries, levelFilter, _searchQuery, connectionState) { entries, filter, query, connection ->
             LogScreenState(
                 filteredEntries = entries,
                 levelFilter = filter,
+                searchQuery = query,
                 connectionState = connection,
             )
         }

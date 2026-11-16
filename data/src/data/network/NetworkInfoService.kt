@@ -23,7 +23,6 @@
 package com.github.yumeyucca.yumebox.data.network
 
 
-import com.github.yumeyucca.yumebox.core.util.NetworkInterfaces
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.*
@@ -57,6 +56,10 @@ sealed class IpMonitoringState {
     object Loading : IpMonitoringState()
 }
 
+/**
+ * KimiNoBox: kept for the Moe home's egress IP row after upstream removed it with its classic home.
+ * Only the external IP is looked up; the local address was the classic home's.
+ */
 class NetworkInfoService : Closeable {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -84,7 +87,7 @@ class NetworkInfoService : Closeable {
         _refreshTrigger.tryEmit(Unit)
     }
 
-    suspend fun getLocalIp(): String? = NetworkInterfaces.getLocalIpAddress()
+    private fun getLocalIp(): String? = null
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun getExternalIp(): IpInfo? {

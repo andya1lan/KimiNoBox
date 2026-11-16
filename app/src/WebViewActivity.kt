@@ -35,8 +35,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import com.github.yumeyucca.yumebox.common.util.AppLanguageManager
-import com.github.yumeyucca.yumebox.presentation.webview.WebViewScreen
 import com.github.yumeyucca.yumebox.core.locale.ProvideYumeStrings
+import com.github.yumeyucca.yumebox.presentation.webview.WebViewScreen
+import timber.log.Timber
 
 class WebViewActivity : ComponentActivity() {
     companion object {
@@ -91,8 +92,7 @@ class WebViewActivity : ComponentActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val isDarkMode =
-            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                    Configuration.UI_MODE_NIGHT_YES
+            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val useLightNavigationBarIcons = !isDarkMode
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.setSystemBarsAppearance(
@@ -105,13 +105,45 @@ class WebViewActivity : ComponentActivity() {
             )
         } else {
             @Suppress("DEPRECATION")
-            WindowCompat.getInsetsController(window, window.decorView)
-                .isAppearanceLightNavigationBars = useLightNavigationBarIcons
+            WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightNavigationBars =
+                useLightNavigationBarIcons
         }
 
         val initialUrl =
-            intent.getStringExtra(EXTRA_INITIAL_URL) ?: "file://$filesDir/frontend/index.html"
+            intent.getStringExtra(EXTRA_INITIAL_URL).toLoadableUrl() ?: "file://$filesDir/frontend/index.html"
 
         setContent { ProvideYumeStrings { WebViewScreen(initialUrl = initialUrl) } }
+    }
+
+    // This activity is exported so pinned shortcuts can reopen it, which means any installed app
+    // can hand it a URL. Only web links and the bundled frontend document may be loaded: anything
+    // else (another file:// path, content://, javascript:) would run inside this app's WebView with
+    // its privileges.
+    private fun String?.toLoadableUrl(): String? {
+        val url = this?.trim().orEmpty()
+        if (url.isEmpty()) return null
+        val scheme = url.substringBefore(':', missingDelimiterValue = "").lowercase()
+        if (scheme == "http" || scheme == "https") return url
+        if (scheme == "file") {
+            val uri = Uri.parse(url)
+            val path = uri.path ?: return null
+            val insideFrontend = runCatching {
+                val root = java.io.File(filesDir, "frontend").canonicalFile.toPath()
+                java.io.File(path).canonicalFile.toPath().startsWith(root)
+            }
+                .getOrDefault(false)
+            if (uri.authority.isNullOrEmpty() && insideFrontend) return url
+        }
+        Timber.w("Refusing to load unsupported URL from an external intent: %s", url)
+        return null
+    }
+
+    override fun onDestroy() {
+        // The picker result can never arrive once this instance is gone, and a pending callback keeps
+        // the WebView (and through it this Activity) reachable. Answering with null aborts the page's
+        // outstanding <input type=file> request exactly as the user cancelling the picker would.
+        runCatching { filePathCallback?.onReceiveValue(null) }
+        filePathCallback = null
+        super.onDestroy()
     }
 }

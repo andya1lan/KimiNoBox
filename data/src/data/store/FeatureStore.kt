@@ -25,9 +25,7 @@ package com.github.yumeyucca.yumebox.data.store
 import com.github.yumeyucca.yumebox.data.model.RemoteProtocol
 import com.tencent.mmkv.MMKV
 
-class FeatureStore(
-    externalMmkv: MMKV,
-) : MMKVPreference(externalMmkv = externalMmkv) {
+class FeatureStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = externalMmkv) {
     private companion object {
         const val KEY_LAST_APP_VERSION_CODE = "last_app_version_code"
         const val KEY_POST_UPDATE_COLD_START_PENDING = "post_update_cold_start_pending"
@@ -63,37 +61,12 @@ class FeatureStore(
         return isUpdated
     }
 
-    /**
-     * Read-and-clear post-update cold-start marker. Returns true only for the first consumer after
-     * an app update.
-     */
+    /** Read-and-clear post-update cold-start marker. Returns true only for the first consumer after an app update. */
     fun consumePostUpdateColdStartPending(): Boolean {
         val pending = mmkv.decodeBool(KEY_POST_UPDATE_COLD_START_PENDING, false)
         if (pending) {
             mmkv.removeValueForKey(KEY_POST_UPDATE_COLD_START_PENDING)
         }
         return pending
-    }
-
-    fun setLibraryCacheVersion(
-        libraryName: String,
-        version: Int,
-    ) {
-        mmkv.encode("library_version_$libraryName", version)
-    }
-
-    fun getLibraryCacheVersion(libraryName: String): Int = mmkv.decodeInt("library_version_$libraryName", -1)
-
-    fun setAssetCacheVersion(
-        assetPath: String,
-        version: Int,
-    ) {
-        mmkv.encode("asset_version_$assetPath", version)
-    }
-
-    fun getAssetCacheVersion(assetPath: String): Int = mmkv.decodeInt("asset_version_$assetPath", -1)
-
-    fun clearAll() {
-        mmkv.edit().clear().apply()
     }
 }

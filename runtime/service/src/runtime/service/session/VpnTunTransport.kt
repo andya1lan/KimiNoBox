@@ -57,7 +57,7 @@ class VpnTunTransport(
         log.i(RuntimeLog.Type.Transport, "start begin")
         core.startVpn(
             config = runtime.config,
-            stack = vpnTunStack(store.tunStackMode),
+            stack = store.tunStack.forVpnService().toCoreStack(),
             openTunnel = { openTunnel(runtime.config) },
         )
         trackUnderlyingNetworks()
@@ -102,26 +102,22 @@ class VpnTunTransport(
                 // Apps that honour the system proxy rather than only the tun still reach the core.
                 if (store.systemProxy) {
                     httpProxyPort(config)?.let { port ->
-                        setHttpProxy(
-                            ProxyInfo.buildDirectProxy("127.0.0.1", port, httpProxyExclusionList)
-                        )
+                        setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", port, httpProxyExclusionList))
                     }
                 }
             }
 
             VpnTunnel(
                 fd = establish()?.detachFd() ?: error("Establish VPN rejected by system"),
-                gateway =
-                    "$TUN_GATEWAY/$TUN_SUBNET_PREFIX" +
-                        if (ipv6) ",$TUN_GATEWAY6/$TUN_SUBNET_PREFIX6" else "",
+                gateway = "$TUN_GATEWAY/$TUN_SUBNET_PREFIX" + if (ipv6) ",$TUN_GATEWAY6/$TUN_SUBNET_PREFIX6" else "",
                 dns = if (store.dnsHijacking) NET_ANY else TUN_DNS + if (ipv6) ",$TUN_DNS6" else "",
             )
         }
 
     /**
-     * Route table: explicit config route excludes win (native excludeRoute on API 33+, computed
-     * included routes below), then the private-network bypass list, otherwise route everything.
-     * Every partial table also routes the tun DNS address.
+     * Route table: explicit config route excludes win (native excludeRoute on API 33+, computed included routes below),
+     * then the private-network bypass list, otherwise route everything. Every partial table also routes the tun DNS
+     * address.
      */
     private fun VpnService.Builder.configureRoutes(ipv6: Boolean) {
         val excludes = store.tunRouteExcludeAddress.map(String::trim).filter(String::isNotEmpty)
@@ -153,9 +149,7 @@ class VpnTunTransport(
     }
 
     private fun VpnService.Builder.addRoutes(cidrArray: Int) {
-        vpnService.resources.getStringArray(cidrArray).map(::parseCIDR).forEach {
-            addRoute(it.ip, it.prefix)
-        }
+        vpnService.resources.getStringArray(cidrArray).map(::parseCIDR).forEach { addRoute(it.ip, it.prefix) }
     }
 
     /** Core sockets are protected individually; the app's own traffic must stay in the VPN. */
@@ -167,21 +161,15 @@ class VpnTunTransport(
             AccessControlMode.RejectAll -> Unit
 
             AccessControlMode.AcceptSelected ->
-                (store.accessControlPackages + self).forEach {
-                    runCatching { addAllowedApplication(it) }
-                }
+                (store.accessControlPackages + self).forEach { runCatching { addAllowedApplication(it) } }
 
             AccessControlMode.RejectSelected -> {
-                (store.accessControlPackages - self).forEach {
-                    runCatching { addDisallowedApplication(it) }
-                }
+                (store.accessControlPackages - self).forEach { runCatching { addDisallowedApplication(it) } }
             }
         }
     }
 
-    /**
-     * The core's HTTP proxy port from the compiled config (mixed-port preferred, else http port).
-     */
+    /** The core's HTTP proxy port from the compiled config (mixed-port preferred, else http port). */
     private fun httpProxyPort(config: String): Int? =
         portFromConfig(config, "mixed-port") ?: portFromConfig(config, "port")
 
@@ -197,16 +185,14 @@ class VpnTunTransport(
 
     /** Blocking: SIGTERM with a grace period, then SIGKILL. */
     fun stop() {
-        underlyingNetworkCallback?.let { callback ->
-            runCatching { connectivity?.unregisterNetworkCallback(callback) }
-        }
+        underlyingNetworkCallback?.let { callback -> runCatching { connectivity?.unregisterNetworkCallback(callback) } }
         underlyingNetworkCallback = null
         core.stop()
     }
 
     /**
-     * Before API 29 a VPN does not follow default-network switches on its own; re-declaring "use
-     * the default network" on every change keeps the tun's egress from sticking to a dead link.
+     * Before API 29 a VPN does not follow default-network switches on its own; re-declaring "use the default network"
+     * on every change keeps the tun's egress from sticking to a dead link.
      */
     private fun trackUnderlyingNetworks() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q || underlyingNetworkCallback != null) {
@@ -216,8 +202,7 @@ class VpnTunTransport(
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) = resetUnderlyingNetworks()
 
-                override fun onLosing(network: Network, maxMsToLive: Int) =
-                    resetUnderlyingNetworks()
+                override fun onLosing(network: Network, maxMsToLive: Int) = resetUnderlyingNetworks()
 
                 override fun onLost(network: Network) = resetUnderlyingNetworks()
 
@@ -241,9 +226,6 @@ class VpnTunTransport(
     }
 
     private companion object {
-        fun vpnTunStack(mode: String): String =
-            if (mode.equals("mips", ignoreCase = true)) "mips" else "gvisor"
-
         // Keep in lockstep with the core's tun MTU (native/tun/tun.go). 1500 is the standard value;
         // a jumbo 9000 MTU broke path-MTU on some paths, so both sides pin 1500.
         private const val TUN_MTU = 1500

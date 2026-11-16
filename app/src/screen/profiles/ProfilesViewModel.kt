@@ -22,15 +22,15 @@
 
 package com.github.yumeyucca.yumebox.screen.profiles
 
-
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
-import com.github.yumeyucca.yumebox.core.presentation.AndroidContractStateViewModel
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.store.LinkOpenMode
 import com.github.yumeyucca.yumebox.data.store.Preference
 import com.github.yumeyucca.yumebox.data.store.ProfileLink
 import com.github.yumeyucca.yumebox.data.store.ProfileLinksStore
+import com.github.yumeyucca.yumebox.presentation.base.AndroidContractStateViewModel
 import com.github.yumeyucca.yumebox.runtime.api.FetchObserver
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.runtime.api.ProfileUpdateReport
@@ -45,7 +45,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import timber.log.Timber
 import java.util.*
 import java.util.concurrent.atomic.AtomicLong
@@ -54,8 +53,7 @@ class ProfilesViewModel(
     application: Application,
     private val profilesRepository: ProfilesRepository,
     profileLinksStorage: ProfileLinksStore,
-) :
-    AndroidContractStateViewModel<ProfilesUiState, ProfilesUiEffect>(
+) : AndroidContractStateViewModel<ProfilesUiState, Nothing>(
         application,
         ProfilesUiState(),
     ) {
@@ -63,13 +61,10 @@ class ProfilesViewModel(
     val links: Preference<List<ProfileLink>> = profileLinksStorage.links
     val defaultLinkId: Preference<String> = profileLinksStorage.defaultLinkId
 
-    fun setOpenMode(mode: LinkOpenMode) = linkOpenMode.set(mode)
-
     private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
     val profiles: StateFlow<List<Profile>> = _profiles.asStateFlow()
 
-    private val _activeProfile = MutableStateFlow<Profile?>(null)
-    val activeProfile: StateFlow<Profile?> = _activeProfile.asStateFlow()
+    private var refreshGeneration = 0
 
     private val _downloadProgress = MutableStateFlow<DownloadProgress?>(null)
     val downloadProgress: StateFlow<DownloadProgress?> = _downloadProgress.asStateFlow()
@@ -100,32 +95,31 @@ class ProfilesViewModel(
         }
     }
 
-    /** KimiNoBox: the list and the active profile, written only by the latest read started. */
+    /** KimiNoBox: the list, written only by the latest read started. */
     private suspend fun readProfiles() {
         val seq = readSeq.incrementAndGet()
         val allProfiles = profilesRepository.queryAllProfiles()
-        val active = profilesRepository.queryActiveProfile()
-        if (seq == readSeq.get()) {
-            _profiles.value = allProfiles
-            _activeProfile.value = active
-        }
+        if (seq == readSeq.get()) _profiles.value = allProfiles
     }
 
     // Fault barrier: any refresh failure is surfaced as UI error state (CE rethrown).
     @Suppress("TooGenericExceptionCaught")
     fun refreshProfiles() {
+        val generation = ++refreshGeneration
         viewModelScope.launch {
             try {
                 setLoading(true)
                 readProfiles() // KimiNoBox: see readSeq
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
+                if (generation != refreshGeneration) return@launch
                 Timber.e(error, "Failed to refresh profiles")
                 showError(
-                    YumeTxt.ProfilesVM.Message.UpdateFailed.format(error.message ?: "Unknown")
+                    YumeTxt.ProfilesVM.Message.UpdateFailed
+                        .format(error.message ?: "Unknown"),
                 )
             } finally {
-                setLoading(false)
+                if (generation == refreshGeneration) setLoading(false)
             }
         }
     }
@@ -145,22 +139,19 @@ class ProfilesViewModel(
             var createdUuid: UUID? = null
             try {
                 setLoading(true)
+                // Set before the first suspend call: the sheet derives "an import is running" from
+                // this value, so it has to flip in the same frame as the tap, not one IPC later.
+                _downloadProgress.value = DownloadProgress(message = YumeTxt.ProfilesVM.Progress.Preparing)
                 // File imports must persist the content/file URI as source so ProfileProcessor can
                 // re-materialize config.yaml and prefetch proxy/rule providers on update.
                 val resolvedSource =
                     source.ifBlank {
                         if (type == Profile.Type.File) fileUri?.toString().orEmpty() else ""
                     }
-                val uuid =
-                    profilesRepository.createProfile(type, name, resolvedSource, ageSecretKey)
+                val uuid = profilesRepository.createProfile(type, name, resolvedSource, ageSecretKey)
                 createdUuid = uuid
 
-                _downloadProgress.value =
-                    DownloadProgress(percent = 0, message = YumeTxt.ProfilesVM.Progress.Preparing)
-
-                val observer = FetchObserver { status ->
-                    _downloadProgress.value = status.toDownloadProgress()
-                }
+                val observer = FetchObserver { status -> _downloadProgress.value = status.toDownloadProgress() }
 
                 if (type == Profile.Type.File && fileUri != null) {
                     getApplication<Application>().copyProfileImport(fileUri, uuid)
@@ -169,7 +160,6 @@ class ProfilesViewModel(
                 val report = profilesRepository.updateProfile(uuid, observer)
                 _downloadProgress.value =
                     DownloadProgress(
-                        percent = 100,
                         message = YumeTxt.ProfilesVM.Progress.ImportComplete,
                         isCompleted = true,
                     )
@@ -183,32 +173,18 @@ class ProfilesViewModel(
                 createdUuid?.let { uuid ->
                     runCatching { profilesRepository.deleteProfile(uuid) }
                         .onFailure { deleteError ->
+                            // Cancellation during the rollback is not a rollback failure, and must
+                            // not let the error banner below run after the job was cancelled.
+                            if (deleteError is CancellationException) throw deleteError
                             Timber.w(deleteError, "Failed to rollback profile creation: $uuid")
                         }
                 }
                 refreshProfiles()
-                showError(YumeTxt.ProfilesVM.Message.AddFailed.format(error.message ?: "Unknown"))
+                showError(
+                    YumeTxt.ProfilesVM.Message.AddFailed
+                        .format(error.message ?: "Unknown"),
+                )
                 _downloadProgress.value = null
-            } finally {
-                setLoading(false)
-            }
-        }
-    }
-
-    // Fault barrier: any clone failure is surfaced as UI error state (CE rethrown).
-    @Suppress("TooGenericExceptionCaught")
-    fun cloneProfile(uuid: UUID) {
-        viewModelScope.launch {
-            try {
-                setLoading(true)
-                val newUuid = profilesRepository.cloneProfile(uuid)
-                showMessage(YumeTxt.ProfilesVM.Message.ProfileAdded.format("Clone"))
-                refreshProfiles()
-                Timber.i("Profile cloned: from=$uuid to=$newUuid")
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                Timber.e(error, "Failed to clone profile")
-                showError(YumeTxt.ProfilesVM.Message.AddFailed.format(error.message ?: "Unknown"))
             } finally {
                 setLoading(false)
             }
@@ -229,29 +205,8 @@ class ProfilesViewModel(
                 if (error is CancellationException) throw error
                 Timber.e(error, "Failed to delete profile")
                 showError(
-                    YumeTxt.ProfilesVM.Message.DeleteFailed.format(error.message ?: "Unknown")
-                )
-            } finally {
-                setLoading(false)
-            }
-        }
-    }
-
-    // Fault barrier: any activate failure is surfaced as UI error state (CE rethrown).
-    @Suppress("TooGenericExceptionCaught")
-    fun activateProfile(uuid: UUID) {
-        viewModelScope.launch {
-            try {
-                setLoading(true)
-                profilesRepository.setActiveProfile(uuid)
-                showMessage(YumeTxt.ProfilesVM.Message.ProfileUpdated.format("Active"))
-                refreshProfiles()
-                Timber.i("Profile activated: $uuid")
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                Timber.e(error, "Failed to activate profile")
-                showError(
-                    YumeTxt.ProfilesVM.Message.ToggleFailed.format(error.message ?: "Unknown")
+                    YumeTxt.ProfilesVM.Message.DeleteFailed
+                        .format(error.message ?: "Unknown"),
                 )
             } finally {
                 setLoading(false)
@@ -265,31 +220,13 @@ class ProfilesViewModel(
         viewModelScope.launch {
             try {
                 setLoading(true)
-                _downloadProgress.value =
-                    DownloadProgress(percent = 0, message = YumeTxt.ProfilesVM.Progress.Preparing)
-
-                val observer = FetchObserver { status ->
-                    _downloadProgress.value = status.toDownloadProgress()
-                }
-
-                val report = profilesRepository.updateProfile(uuid, observer)
-
-                _downloadProgress.value =
-                    DownloadProgress(
-                        percent = 100,
-                        message = YumeTxt.ProfilesVM.Progress.ImportComplete,
-                        isCompleted = true,
-                    )
-                val displayName =
-                    profilesRepository.queryProfileByUUID(uuid)?.name ?: uuid.toString()
-                showMessage(successMessage(report, displayName = displayName, isCreate = false))
-                refreshProfiles()
-                Timber.i("Profile updated: $uuid")
+                importProfile(uuid)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 Timber.e(error, "Failed to update profile")
                 showError(
-                    YumeTxt.ProfilesVM.Message.UpdateFailed.format(error.message ?: "Unknown")
+                    YumeTxt.ProfilesVM.Message.UpdateFailed
+                        .format(error.message ?: "Unknown"),
                 )
                 _downloadProgress.value = null
             } finally {
@@ -298,35 +235,80 @@ class ProfilesViewModel(
         }
     }
 
-    // Fault barrier: any patch failure is surfaced as UI error state (CE rethrown).
+    /**
+     * Commits the 编辑配置 page's draft and makes it actually reach the config file.
+     *
+     * A picked YAML is copied over `config.yaml` first, so the re-import below reads the new bytes rather than the
+     * previous ones, and the row patch comes second so the re-import sees the new source. Patching alone only rewrites
+     * the database row: a new subscription URL would never be fetched and a re-picked file would never be re-validated
+     * or re-prefetched.
+     */
+    // Fault barrier: any copy/patch/update failure is surfaced as UI error state (CE rethrown).
     @Suppress("TooGenericExceptionCaught")
-    fun patchProfile(uuid: UUID, patch: ProfilePatch) {
+    fun applyProfileEdits(
+        uuid: UUID,
+        patch: ProfilePatch?,
+        pickedConfigFile: Uri?,
+        reimport: Boolean,
+    ) {
+        if (patch == null && pickedConfigFile == null) return
         viewModelScope.launch {
             try {
                 setLoading(true)
-                profilesRepository.patchProfile(uuid, patch)
-                showMessage(YumeTxt.ProfilesVM.Message.ProfileUpdated.format(patch.name))
-                refreshProfiles()
-                Timber.i("Profile patched: $uuid")
+                pickedConfigFile?.let { uri -> getApplication<Application>().copyProfileImport(uri, uuid) }
+                patch?.let { profilesRepository.patchProfile(uuid, it) }
+                if (reimport) {
+                    importProfile(uuid)
+                } else {
+                    patch?.let {
+                        showMessage(
+                            YumeTxt.ProfilesVM.Message.ProfileUpdated
+                                .format(it.name),
+                        )
+                    }
+                    refreshProfiles()
+                }
+                Timber.i("Profile edits applied: $uuid")
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                Timber.e(error, "Failed to patch profile")
+                Timber.e(error, "Failed to apply profile edits")
                 showError(
-                    YumeTxt.ProfilesVM.Message.UpdateFailed.format(error.message ?: "Unknown")
+                    YumeTxt.ProfilesVM.Message.UpdateFailed
+                        .format(error.message ?: "Unknown"),
                 )
+                _downloadProgress.value = null
+                refreshProfiles()
             } finally {
                 setLoading(false)
             }
         }
     }
 
-    fun importProfileFromFile(uri: Uri, name: String) {
-        createProfile(type = Profile.Type.File, name = name, fileUri = uri)
+    /** One refresh/import of [uuid]; the caller owns the surrounding loading and error barrier. */
+    private suspend fun importProfile(uuid: UUID) {
+        _downloadProgress.value = DownloadProgress(message = YumeTxt.ProfilesVM.Progress.Preparing)
+
+        val observer = FetchObserver { status -> _downloadProgress.value = status.toDownloadProgress() }
+
+        val report = profilesRepository.updateProfile(uuid, observer)
+
+        _downloadProgress.value =
+            DownloadProgress(
+                message = YumeTxt.ProfilesVM.Progress.ImportComplete,
+                isCompleted = true,
+            )
+        val displayName = profilesRepository.queryProfileByUUID(uuid)?.name ?: uuid.toString()
+        showMessage(successMessage(report, displayName = displayName, isCreate = false))
+        refreshProfiles()
+        Timber.i("Profile imported: $uuid")
     }
 
     // Fault barrier: any reorder failure logs and re-syncs the list from storage (CE rethrown).
     @Suppress("TooGenericExceptionCaught")
-    fun reorderProfiles(from: Int, to: Int) {
+    fun reorderProfiles(
+        from: Int,
+        to: Int,
+    ) {
         viewModelScope.launch {
             try {
                 val current = _profiles.value
@@ -347,28 +329,68 @@ class ProfilesViewModel(
         }
     }
 
-    // Fault barrier: any toggle failure is surfaced as UI error state (CE rethrown).
+    // Sort sheet commits its whole draft order once on drag release (no per-move writes).
+    // Fault barrier mirrors reorderProfiles: failures log and re-sync from storage (CE rethrown).
     @Suppress("TooGenericExceptionCaught")
-    fun toggleProfileEnabled(uuid: UUID) {
+    fun commitProfileOrder(uuids: List<UUID>) {
         viewModelScope.launch {
             try {
-                val profile =
-                    profilesRepository.queryProfileByUUID(uuid) ?: error("Profile not found: $uuid")
+                val current = _profiles.value
+                if (uuids.size != current.size) return@launch
+                val byId = current.associateBy { it.uuid }
+                val reordered = uuids.mapNotNull { byId[it] }
+                if (reordered.size != current.size) return@launch
 
-                if (profile.active) {
-                    profilesRepository.clearActiveProfile(profile)
-                    showMessage(YumeTxt.ProfilesVM.Message.ProfileUpdated.format(profile.name))
-                } else {
-                    profilesRepository.setActiveProfile(uuid)
-                    showMessage(YumeTxt.ProfilesVM.Message.ProfileUpdated.format(profile.name))
-                }
+                _profiles.value = reordered
+                profilesRepository.reorderProfiles(uuids)
+                Timber.d("Profiles order committed: ${uuids.size} items")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Timber.e(error, "Failed to commit profiles order")
                 refreshProfiles()
-                Timber.d("Profile toggled: $uuid, active=${!profile.active}")
+            }
+        }
+    }
+
+    // Fault barrier: any toggle failure is surfaced as UI error state (CE rethrown).
+    @Suppress("TooGenericExceptionCaught")
+    fun setProfileActive(
+        uuid: UUID,
+        active: Boolean,
+    ) {
+        viewModelScope.launch {
+            try {
+                val profile = profilesRepository.queryProfileByUUID(uuid) ?: error("Profile not found: $uuid")
+
+                if (active) {
+                    profilesRepository.setActiveProfile(uuid)
+                } else {
+                    profilesRepository.clearActiveProfile(profile)
+                }
+
+                // Keep the list in the intended state while the refresh runs; a stale refresh
+                // must not flip the pill back for a frame.
+                _profiles.value =
+                    _profiles.value.map { item ->
+                        when {
+                            item.uuid == uuid -> item.copy(active = active)
+                            active -> item.copy(active = false)
+                            else -> item
+                        }
+                    }
+                showMessage(
+                    YumeTxt.ProfilesVM.Message.ProfileUpdated
+                        .format(profile.name),
+                )
+                refreshProfiles()
+                Timber.d("Profile active set: $uuid, active=$active")
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 Timber.e(error, "Failed to toggle profile")
+                refreshProfiles()
                 showError(
-                    YumeTxt.ProfilesVM.Message.ToggleFailed.format(error.message ?: "Unknown")
+                    YumeTxt.ProfilesVM.Message.ToggleFailed
+                        .format(error.message ?: "Unknown"),
                 )
             }
         }
@@ -387,8 +409,8 @@ class ProfilesViewModel(
     }
 
     /**
-     * Soft warnings for partial provider prefetch. Never routes through showError so the Add sheet
-     * stays on the success path when the main config committed.
+     * Soft warnings for partial provider prefetch. Never routes through showError so the Add sheet stays on the success
+     * path when the main config committed.
      */
     private fun successMessage(
         report: ProfileUpdateReport,
@@ -410,17 +432,15 @@ class ProfilesViewModel(
             return YumeTxt.ProfilesVM.Message.ProvidersUndiscovered
         }
         return if (isCreate) {
-            YumeTxt.ProfilesVM.Message.ProfileAdded.format(displayName)
+            YumeTxt.ProfilesVM.Message.ProfileAdded
+                .format(displayName)
         } else {
-            YumeTxt.ProfilesVM.Message.ProfileUpdated.format(displayName)
+            YumeTxt.ProfilesVM.Message.ProfileUpdated
+                .format(displayName)
         }
     }
 
-    private fun showError(message: String) {
-        postError(message, ProfilesUiEffect.ShowError(message))
-    }
+    private fun showError(message: String) = postError(message)
 
-    private fun showMessage(message: String) {
-        postMessage(message, ProfilesUiEffect.ShowMessage(message))
-    }
+    private fun showMessage(message: String) = postMessage(message)
 }

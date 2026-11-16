@@ -22,20 +22,19 @@
 
 package com.github.yumeyucca.yumebox.screen.profiles
 
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.store.LinkOpenMode
 import com.github.yumeyucca.yumebox.data.store.ProfileLink
 import com.github.yumeyucca.yumebox.presentation.component.PreferenceEnumItem
 import com.github.yumeyucca.yumebox.presentation.component.SectionCard
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -55,9 +54,7 @@ internal fun LinkSettingsContent(
 ) {
     val spacing = AppTheme.spacing
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = spacing.space16),
+        modifier = Modifier.fillMaxWidth().padding(bottom = spacing.space16),
         verticalArrangement = Arrangement.spacedBy(UiDp.dp12),
     ) {
         LinkOpenModeSection(linkOpenMode, onOpenModeChange)
@@ -68,18 +65,22 @@ internal fun LinkSettingsContent(
 }
 
 @Composable
-private fun LinkOpenModeSection(mode: LinkOpenMode, onChange: (LinkOpenMode) -> Unit) {
+private fun LinkOpenModeSection(
+    mode: LinkOpenMode,
+    onChange: (LinkOpenMode) -> Unit,
+) {
     SectionCard(title = YumeTxt.ProfilesPage.LinkSettings.OpenMode) {
         PreferenceEnumItem(
             title = YumeTxt.ProfilesPage.LinkSettings.OpenMode,
             currentValue = mode,
-            items =
-                listOf(
-                    YumeTxt.ProfilesPage.LinkSettings.OpenModeInApp,
-                    YumeTxt.ProfilesPage.LinkSettings.OpenModeExternal,
-                ),
             values = listOf(LinkOpenMode.IN_APP, LinkOpenMode.EXTERNAL_BROWSER),
             onValueChange = onChange,
+            label = { openMode ->
+                when (openMode) {
+                    LinkOpenMode.IN_APP -> YumeTxt.ProfilesPage.LinkSettings.OpenModeInApp
+                    LinkOpenMode.EXTERNAL_BROWSER -> YumeTxt.ProfilesPage.LinkSettings.OpenModeExternal
+                }
+            },
         )
     }
 }
@@ -97,9 +98,9 @@ private fun DefaultLinkSection(
             title = YumeTxt.ProfilesPage.LinkSettings.DefaultLink,
             summary = YumeTxt.ProfilesPage.LinkSettings.DefaultLinkSummary,
             currentValue = links.firstOrNull { it.id == defaultLinkId }?.id ?: links.first().id,
-            items = links.map { it.name },
             values = links.map { it.id },
             onValueChange = onChange,
+            label = { id -> links.firstOrNull { it.id == id }?.name ?: id },
         )
     }
 }
@@ -132,10 +133,7 @@ private fun ProfileLinkList(
                         Text(
                             text = link.url,
                             style = MiuixTheme.textStyles.body2,
-                            color =
-                                MiuixTheme.colorScheme.onSurface.copy(
-                                    alpha = opacity.secondaryText
-                                ),
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = opacity.secondaryText),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -161,7 +159,10 @@ private fun ProfileLinkList(
 }
 
 @Composable
-private fun LinkSettingsActions(onClose: () -> Unit, onAdd: () -> Unit) {
+private fun LinkSettingsActions(
+    onClose: () -> Unit,
+    onAdd: () -> Unit,
+) {
     val spacing = AppTheme.spacing
     Row(
         modifier = Modifier.fillMaxWidth(),

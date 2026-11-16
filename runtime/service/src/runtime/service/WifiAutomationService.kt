@@ -9,16 +9,19 @@
 
 package com.github.yumeyucca.yumebox.runtime.service
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.github.yumeyucca.yumebox.data.model.RunMode
 import com.github.yumeyucca.yumebox.data.model.WifiAutomationAction
 import com.github.yumeyucca.yumebox.data.model.WifiAutomationFallbackAction
@@ -31,6 +34,8 @@ import com.github.yumeyucca.yumebox.runtime.api.appContextOrSelf
 import com.github.yumeyucca.yumebox.runtime.service.profile.ProfileService
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidObservation
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidObserver
+import com.github.yumeyucca.yumebox.runtime.service.util.ServiceLogoIcons
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,29 +45,43 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.util.UUID
 
 /**
- * User-started foreground service that keeps SSID monitoring alive when the VPN is stopped.
- * It intentionally has no boot receiver: background-location permission is not part of v1.
+ * User-started foreground service that keeps SSID monitoring alive when the VPN is stopped. It intentionally has no
+ * boot receiver: background-location permission is not part of v1.
  */
 class WifiAutomationService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val settings by lazy {
-        NetworkSettingsStore(MMKVProvider().getMMKV(NETWORK_SETTINGS_STORE))
-    }
+    private val settings by lazy { NetworkSettingsStore(MMKVProvider().getMMKV(NETWORK_SETTINGS_STORE)) }
     private val profileService by lazy { ProfileService(this) }
     private var observer: WifiSsidObserver? = null
     private var applyJob: Job? = null
+
+    // Set when the location grant is missing: the service then has no legal foreground type to
+    // run under, so it stops instead of letting startForeground throw in onCreate.
+    private var foregroundDenied = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        if (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            Timber.w("Wi-Fi automation has no location grant; not starting as a foreground service")
+            foregroundDenied = true
+            stopSelf()
+            return
+        }
         startForegroundNotification()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (foregroundDenied) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         if (!settings.wifiAutomationEnabled.value || settings.runMode.value != RunMode.VpnService) {
             stopSelf(startId)
             return START_NOT_STICKY
@@ -86,11 +105,10 @@ class WifiAutomationService : Service() {
 
     private fun onSsidObservation(observation: WifiSsidObservation) {
         applyJob?.cancel()
-        applyJob =
-            serviceScope.launch {
-                delay(RULE_STABILIZATION_MILLIS)
-                applyRule(observation)
-            }
+        applyJob = serviceScope.launch {
+            delay(RULE_STABILIZATION_MILLIS)
+            applyRule(observation)
+        }
     }
 
     private suspend fun applyRule(observation: WifiSsidObservation) {
@@ -99,8 +117,7 @@ class WifiAutomationService : Service() {
 
         when (observation) {
             is WifiSsidObservation.Connected -> {
-                val rule =
-                    settings.wifiAutomationRules.value.firstOrNull { it.ssid == observation.ssid }
+                val rule = settings.wifiAutomationRules.value.firstOrNull { it.ssid == observation.ssid }
                 if (rule == null) {
                     applyFallbackAction(
                         settings.wifiAutomationOtherWifiAction.value,
@@ -168,20 +185,27 @@ class WifiAutomationService : Service() {
 
     private suspend fun stopVpn() {
         if (RuntimeCoordinator.state.value.owner != RuntimeOwner.VpnService) return
-        RuntimeCoordinator.stop()
+        try {
+            RuntimeCoordinator.stop()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+            Timber.w(error, "Wi-Fi automation stop failed")
+        }
     }
 
     private fun startForegroundNotification() {
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.wifi_automation_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.wifi_automation_channel_name),
+                    NotificationManager.IMPORTANCE_LOW,
+                )
             )
-        )
         val notification =
             NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_logo_service)
+                .setSmallIcon(ServiceLogoIcons.resId())
                 .setContentTitle(getString(R.string.wifi_automation_notification_title))
                 .setContentText(getString(R.string.wifi_automation_notification_text))
                 .setOngoing(true)

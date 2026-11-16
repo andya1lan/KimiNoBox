@@ -117,7 +117,7 @@ class NodeSourceManager(
                         config = config,
                         form = form,
                         state = states[config.id] ?: NodeSourceState(),
-                        boundProfileIds = all.filter { config.id in it.overrideIds }.map { it.profileId }.toSet(),
+                        boundProfileIds = all.filter { config.id in it.enabledOverrideIds }.map { it.profileId }.toSet(),
                     )
                 }
             }
@@ -220,7 +220,7 @@ class NodeSourceManager(
     /** Binds [sourceIds] to the end of [profileId]'s chain in this order, and applies it once. */
     suspend fun bind(sourceIds: List<String>, profileId: String) =
         withContext(Dispatchers.IO) {
-            sourceIds.forEach { bindings.addOverride(profileId, it) }
+            sourceIds.forEach { applyOverride(profileId, it) }
             reapplyIfActive(profileId)
         }
 
@@ -375,7 +375,10 @@ class NodeSourceManager(
     suspend fun setOverrideChain(profileId: String, chain: List<String>) =
         withContext(Dispatchers.IO) {
             val binding = bindings.getBinding(profileId)
-            bindings.setBinding(binding?.setOverrides(chain) ?: ProfileBinding.withOverrides(profileId, chain))
+            bindings.setBinding(
+                binding?.let { it.copy(overrideIds = chain, disabledOverrideIds = it.disabledOverrideIds.filter(chain::contains)) }
+                    ?: ProfileBinding(profileId = profileId, overrideIds = chain)
+            )
             reapplyIfActive(profileId)
         }
 
@@ -386,15 +389,28 @@ class NodeSourceManager(
      */
     fun providerOrder(profileId: String): Flow<List<String>> =
         combine(bindings.getBindingFlow(profileId), namesById) { binding, names ->
-            binding?.overrideIds.orEmpty().flatMap { names[it].orEmpty() }
+            binding?.enabledOverrideIds.orEmpty().flatMap { names[it].orEmpty() }
         }
 
     /** Binds or unbinds any override of [profileId]; a new one goes to the end of the chain. */
     suspend fun setOverrideBound(profileId: String, overrideId: String, bound: Boolean) =
         withContext(Dispatchers.IO) {
-            if (bound) bindings.addOverride(profileId, overrideId) else bindings.removeOverride(profileId, overrideId)
+            if (bound) applyOverride(profileId, overrideId) else bindings.removeOverride(profileId, overrideId)
             reapplyIfActive(profileId)
         }
+
+    /**
+     * Applies [overrideId] to [profileId]: appended to the chain, or ticked again where upstream's
+     * profile override page left it attached but not applied.
+     */
+    private suspend fun applyOverride(profileId: String, overrideId: String) {
+        val binding = bindings.getBinding(profileId)
+        if (binding != null && overrideId in binding.disabledOverrideIds) {
+            bindings.setBinding(binding.copy(disabledOverrideIds = binding.disabledOverrideIds - overrideId))
+        } else {
+            bindings.addOverride(profileId, overrideId)
+        }
+    }
 
     /** §2.1 item 6: the newest copy (the running profile's first on a tie) over the stale ones. */
     suspend fun syncCopies(source: NodeSource, preferredProfileId: String?) =

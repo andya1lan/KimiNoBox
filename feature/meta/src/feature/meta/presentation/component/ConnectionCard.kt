@@ -37,9 +37,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
-import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
-import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
+import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.displayTarget
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.networkName
+import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
+import java.time.LocalDateTime
+import java.time.ZoneId
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.SinkFeedback
@@ -57,28 +61,8 @@ fun ConnectionCard(
     val backgroundColor = MiuixTheme.colorScheme.background
     val interactionSource = remember { MutableInteractionSource() }
 
-    val metadata = connectionInfo.metadata
-    val host = metadata.host
-    val network = metadata.network.ifEmpty { "TCP" }
-    val destinationPort = metadata.destinationPort
-    val sourceIP = metadata.sourceIP
-    val sourcePort = metadata.sourcePort
-    val destinationIp = metadata.destinationIP
-
-    val displayHost =
-        remember(host, destinationIp, destinationPort, sourceIP, sourcePort) {
-            if (host.isNotEmpty() && destinationPort.isNotEmpty()) {
-                "$host:$destinationPort"
-            } else if (host.isNotEmpty()) {
-                host
-            } else if (destinationIp.isNotEmpty() && destinationPort.isNotEmpty()) {
-                "$destinationIp:$destinationPort"
-            } else if (destinationIp.isNotEmpty()) {
-                destinationIp
-            } else {
-                "$sourceIP:$sourcePort"
-            }
-        }
+    val network = remember(connectionInfo) { connectionInfo.networkName() }
+    val displayHost = remember(connectionInfo) { connectionInfo.displayTarget() }
 
     val relativeTime = formatRelativeTime(connectionInfo.start)
 
@@ -131,9 +115,7 @@ fun ConnectionCard(
                     }
 
                     if (connectionInfo.chains.isNotEmpty()) {
-                        ConnectionTagChip(
-                            label = YumeTxt.Connection.ChainCount.format(connectionInfo.chains.size)
-                        )
+                        ConnectionTagChip(label = YumeTxt.Connection.ChainCount.format(connectionInfo.chains.size))
                     }
                 }
 
@@ -163,8 +145,7 @@ private fun ConnectionTagChip(
         style = MiuixTheme.textStyles.footnote1.copy(fontSize = 10.sp),
         color = backgroundColor,
         modifier =
-            Modifier
-                .clip(RoundedCornerShape(radii.full))
+            Modifier.clip(RoundedCornerShape(radii.full))
                 .background(backgroundColor.copy(alpha = opacity.subtle))
                 .padding(horizontal = spacing.space4, vertical = spacing.space2),
     )
@@ -190,15 +171,11 @@ private fun formatRelativeTime(start: String): String {
             hours < 24 -> YumeTxt.Connection.RelativeTime.HoursAgo.format(hours)
             days < 7 -> YumeTxt.Connection.RelativeTime.DaysAgo.format(days)
             else -> {
-                val date =
-                    java.time.LocalDateTime.ofInstant(startTime, java.time.ZoneId.systemDefault())
+                val date = LocalDateTime.ofInstant(startTime, ZoneId.systemDefault())
                 YumeTxt.Connection.RelativeTime.Date.format(date.monthValue, date.dayOfMonth)
             }
         }
-    } catch (
-        _:
-        Exception
-    ) { // fault barrier: date parse or a malformed locale format string must not
+    } catch (_: Exception) { // fault barrier: date parse or a malformed locale format string must not
         // crash UI
         ""
     }

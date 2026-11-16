@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.data.model
 
-
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 
 const val PROXY_SHEET_HEIGHT_FRACTION_MIN = 0.5f
@@ -46,12 +45,6 @@ enum class ProxyDisplayMode {
                 DOUBLE_DETAILED -> YumeTxt.Proxy.DisplayMode.DoubleDetailed
                 DOUBLE_SIMPLE -> YumeTxt.Proxy.DisplayMode.DoubleSimple
             }
-
-    val isSingleColumn: Boolean
-        get() = this == SINGLE_DETAILED || this == SINGLE_SIMPLE
-
-    val showDetail: Boolean
-        get() = this == SINGLE_DETAILED || this == DOUBLE_DETAILED
 }
 
 enum class ProxySortMode {

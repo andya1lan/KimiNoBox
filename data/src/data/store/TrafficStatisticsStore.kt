@@ -18,26 +18,24 @@
  *
  */
 
-@file:Suppress("DuplicatedCode", "UnusedSymbol")
+@file:Suppress("DuplicatedCode")
 
 package com.github.yumeyucca.yumebox.data.store
-
 
 import com.github.yumeyucca.yumebox.data.model.*
 import com.github.yumeyucca.yumebox.data.store.room.AppTrafficDelta
 import com.github.yumeyucca.yumebox.data.store.room.RouteTrafficDelta
 import com.github.yumeyucca.yumebox.data.store.room.TrafficStatisticsDao
 import com.tencent.mmkv.MMKV
-import kotlinx.coroutines.flow.Flow
 import java.util.*
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Facade over traffic statistics persistence.
  *
- * Daily per-app / per-route aggregation lives in Room (see [TrafficStatisticsDao]); each record is
- * a row-level accumulate rather than a whole-history JSON rewrite. The only state that stays in
- * MMKV is the collector's resume baseline (last total upload/download + profile id), kept
- * synchronous.
+ * Daily per-app / per-route aggregation lives in Room (see [TrafficStatisticsDao]); each record is a row-level
+ * accumulate rather than a whole-history JSON rewrite. The only state that stays in MMKV is the collector's resume
+ * baseline (last total upload/download + profile id), kept synchronous.
  */
 class TrafficStatisticsStore(
     private val mmkv: MMKV,
@@ -84,8 +82,7 @@ class TrafficStatisticsStore(
                     dateMillis = dayKey,
                     appKey = record.appKey,
                     routeKey =
-                        record.routeKey?.takeIf(String::isNotBlank)
-                            ?: TrafficStatisticsBuckets.UNATTRIBUTED_ROUTE_KEY,
+                        record.routeKey?.takeIf(String::isNotBlank) ?: TrafficStatisticsBuckets.UNATTRIBUTED_ROUTE_KEY,
                     routeLabel =
                         record.routeLabel?.takeIf(String::isNotBlank)
                             ?: TrafficStatisticsBuckets.UNATTRIBUTED_ROUTE_NAME,
@@ -117,19 +114,7 @@ class TrafficStatisticsStore(
     fun getDailyTotalsFlow(range: StatisticsTimeRange): Flow<List<DailyTrafficSummary>> =
         dao.getDailyTotalsFlow(rangeCutoff(range))
 
-    fun getTodayHourlyTotalsFlow(): Flow<List<HourlyTrafficSummary>> =
-        dao.getHourlyTotalsFlow(startOfDay(now()))
-
-    suspend fun getAppUsagesSorted(range: StatisticsTimeRange): List<AppTrafficUsage> =
-        dao.getAppUsagesSorted(rangeCutoff(range))
-
-    suspend fun getAppRouteUsages(
-        appKey: String,
-        range: StatisticsTimeRange,
-    ): List<AppRouteTrafficUsage> {
-        if (appKey.isBlank()) return emptyList()
-        return dao.getAppRouteUsages(appKey, rangeCutoff(range))
-    }
+    fun getTodayHourlyTotalsFlow(): Flow<List<HourlyTrafficSummary>> = dao.getHourlyTotalsFlow(startOfDay(now()))
 
     // endregion
 
@@ -146,23 +131,17 @@ class TrafficStatisticsStore(
 
     // region resume baseline (synchronous MMKV scalars)
 
-    fun getLastTrafficUpload(): Long =
-        mmkv.decodeLong(KEY_LAST_TRAFFIC_UPLOAD, NO_PERSISTED_TRAFFIC)
+    fun getLastTrafficUpload(): Long = mmkv.decodeLong(KEY_LAST_TRAFFIC_UPLOAD, NO_PERSISTED_TRAFFIC)
 
-    fun getLastTrafficDownload(): Long =
-        mmkv.decodeLong(KEY_LAST_TRAFFIC_DOWNLOAD, NO_PERSISTED_TRAFFIC)
+    fun getLastTrafficDownload(): Long = mmkv.decodeLong(KEY_LAST_TRAFFIC_DOWNLOAD, NO_PERSISTED_TRAFFIC)
 
     fun getLastProfileId(): String? = mmkv.decodeString(KEY_LAST_PROFILE_ID)
 
-    /**
-     * Persists the resume baseline scalars. [forcePersist] is retained for source compatibility
-     * with the collector but no longer schedules a flush — Room/MMKV writes are already immediate.
-     */
+    /** Persists the resume baseline scalars. Room/MMKV writes are already immediate. */
     fun setLastTraffic(
         upload: Long,
         download: Long,
         profileId: String?,
-        @Suppress("UNUSED_PARAMETER") forcePersist: Boolean = false,
     ) {
         mmkv.encode(KEY_LAST_TRAFFIC_UPLOAD, upload)
         mmkv.encode(KEY_LAST_TRAFFIC_DOWNLOAD, download)
@@ -172,9 +151,6 @@ class TrafficStatisticsStore(
             mmkv.encode(KEY_LAST_PROFILE_ID, profileId)
         }
     }
-
-    /** No-op: writes are now immediate (Room row-level upsert + synchronous MMKV scalars). */
-    fun flushNow() = Unit
 
     // endregion
 
@@ -197,8 +173,7 @@ class TrafficStatisticsStore(
         return calendar.timeInMillis
     }
 
-    private fun rangeCutoff(range: StatisticsTimeRange): Long =
-        startOfDay(now()) - ((range.days - 1) * DAY_MS)
+    private fun rangeCutoff(range: StatisticsTimeRange): Long = startOfDay(now()) - ((range.days - 1) * DAY_MS)
 
     // endregion
 

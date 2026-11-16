@@ -23,6 +23,7 @@ package com.github.yumeyucca.yumebox.data.store
 import com.github.yumeyucca.yumebox.data.model.AppColorTheme
 import com.github.yumeyucca.yumebox.data.model.AppLanguage
 import com.github.yumeyucca.yumebox.data.model.DelayTestUrl // KimiNoBox
+import com.github.yumeyucca.yumebox.data.model.NotificationLineContent
 import com.github.yumeyucca.yumebox.data.model.ThemeMode
 import com.tencent.mmkv.MMKV
 
@@ -38,6 +39,12 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val excludeFromRecents by boolFlow(false)
     val showTrafficNotification by boolFlow(true)
     // Read by the foreground service through the same multi-process "settings" store.
+    val liveUpdatesEnabled by boolFlow(true)
+    val notificationFirstLine by enumFlow(NotificationLineContent.ProfileName)
+    val notificationSecondLine by enumFlow(NotificationLineContent.LiveTraffic)
+    val notificationFirstLineText by strFlow("")
+    val notificationSecondLineText by strFlow("")
+    // Read by the foreground service through the same multi-process "settings" store.
     val superIslandEnabled by boolFlow(true)
     val bottomBarAutoHide by boolFlow(true)
     val topBarBlurEnabled by boolFlow(false)
@@ -50,7 +57,9 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val moeWallpaperBiasX by floatFlow(0.0f)
     val moeWallpaperBiasY by floatFlow(0.0f)
     val moeHomeQuote by strFlow(DEFAULT_HOME_QUOTE) // KimiNoBox
+    val moeHomeQuoteAuthor by strFlow("") // KimiNoBox: the default quote's line carries no byline
     val moeSidebarExpanded by boolFlow(true)
+    val moeStatusBarSpacing by boolFlow(false)
     val splitLeftRatio by floatFlow(0.42f)
     val pageScale by floatFlow(1.0f)
     val predictiveBackEnabled by boolFlow(false)
@@ -58,14 +67,15 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val customUserAgent by strFlow("")
     val editorWordWrap by boolFlow(false) // KimiNoBox: soft wrap in every code editor
     val delayTestUrl by strFlow(DelayTestUrl.DEFAULT) // KimiNoBox: what the app's delay tests fetch
+    val autoCheckUpdate by boolFlow(true)
+    // Empty follows the installed build's channel; "stable" is Release, "nightly" is Nightly.
+    val updateChannel by strFlow("")
 
     init {
         migrateLegacyHomeKeys()
         dropShippedHomeQuote() // KimiNoBox
         resetHomePreviewGuideForWallpaperUpdate()
-        if (!mmkv.containsKey("useSystemWallpaper") &&
-            mmkv.decodeString("moeWallpaperUri").orEmpty().isNotBlank()
-        ) {
+        if (!mmkv.containsKey("useSystemWallpaper") && moeWallpaperUri.value.isNotBlank()) {
             mmkv.encode("useSystemWallpaper", false)
         }
     }
@@ -77,9 +87,9 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     }
 
     /**
-     * One-time rename migration: pre-rename builds persisted the home/wallpaper preferences under
-     * `acg*` keys. Copy any legacy value onto the new `moe*` key when the new key is still absent,
-     * so upgrading users keep their saved quote, author, wallpaper and crop framing.
+     * One-time rename migration: pre-rename builds persisted the home/wallpaper preferences under `acg*` keys. Copy any
+     * legacy value onto the new `moe*` key when the new key is still absent, so upgrading users keep their saved quote,
+     * author, wallpaper and crop framing.
      */
     private fun migrateLegacyHomeKeys() {
         fun moveString(old: String, new: String) {
@@ -102,6 +112,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
         moveString("acgWallpaperUri", "moeWallpaperUri")
         moveString("acgWallpaperSourceUri", "moeWallpaperSourceUri")
         moveString("acgHomeQuote", "moeHomeQuote")
+        moveString("acgHomeQuoteAuthor", "moeHomeQuoteAuthor")
         moveFloat("acgWallpaperZoom", "moeWallpaperZoom")
         moveFloat("acgWallpaperBiasX", "moeWallpaperBiasX")
         moveFloat("acgWallpaperBiasY", "moeWallpaperBiasY")

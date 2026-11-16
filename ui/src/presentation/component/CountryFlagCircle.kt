@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.presentation.component
 
-
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -40,27 +39,20 @@ import androidx.compose.ui.unit.Dp
 import com.github.panpf.sketch.rememberAsyncImagePainter
 import com.github.panpf.sketch.request.ImageRequest
 import com.github.yumeyucca.yumebox.common.util.LocaleUtil
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 
 @Composable
 fun CountryFlagCircle(countryCode: String?, modifier: Modifier = Modifier, size: Dp = UiDp.dp18) {
-    val semanticColors = AppTheme.colors
-    val flagUrl = remember(countryCode) { LocaleUtil.normalizeFlagUrl(countryCode) }
-    val flagLabel =
-        remember(countryCode) {
-            countryCode?.trim()?.ifEmpty { null } ?: LocaleUtil.UNKNOWN_FLAG_CODE
-        }
+    val flagUri = remember(countryCode) { LocaleUtil.normalizeFlagUri(countryCode) }
+    val flagLabel = remember(countryCode) { countryCode?.trim()?.ifEmpty { null } ?: LocaleUtil.UNKNOWN_FLAG_CODE }
     val context = LocalContext.current
-    val request = remember(context, flagUrl) { ImageRequest(context, flagUrl) }
+    val request =
+        remember(context, flagUri) { ImageRequest(context, flagUri) { addComponents(CircleFlagFetcher.components) } }
 
     Box(
-        modifier =
-            modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(semanticColors.neutralPlaceholderBackground),
+        modifier = modifier.size(size).clip(CircleShape).background(AppTheme.colors.state.neutralPlaceholderBackground),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -72,8 +64,7 @@ fun CountryFlagCircle(countryCode: String?, modifier: Modifier = Modifier, size:
                 ),
             contentDescription = YumeTxt.Component.Flag.ContentDescription(flagLabel),
             modifier =
-                Modifier
-                    .matchParentSize()
+                Modifier.matchParentSize()
                     // SVG rasterization anti-aliases the circle edge; without the slight
                     // overdraw those translucent edge pixels blend with the light placeholder
                     // background and read as a white ring on dark cards (issue #151 item 11).

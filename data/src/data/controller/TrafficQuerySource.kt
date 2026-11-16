@@ -21,19 +21,16 @@
 package com.github.yumeyucca.yumebox.data.controller
 
 import com.github.yumeyucca.yumebox.core.model.ConnectionSnapshot
-import com.github.yumeyucca.yumebox.domain.model.TrafficData
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The runtime queries the traffic collector needs, expressed as query source so the collector takes
- * a single dependency instead of four lambdas wired from the same facade.
+ * The runtime queries the traffic collector needs, expressed as query source so the collector takes a single dependency
+ * instead of four lambdas wired from the same facade.
  */
 interface TrafficQuerySource {
     val isRunning: Flow<Boolean>
 
     fun currentProfileId(): String?
-
-    suspend fun queryTrafficTotal(): TrafficData
 
     suspend fun queryConnections(): ConnectionSnapshot
 

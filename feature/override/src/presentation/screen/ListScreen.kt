@@ -18,74 +18,42 @@
  *
  */
 
-@file:Suppress("FunctionName", "RedundantIf", "UnnecessaryVariable")
+@file:Suppress("FunctionName")
 
-package com.github.yumeyucca.yumebox.presentation.screen
+package com.github.yumeyucca.yumebox.feature.override.presentation.screen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.github.yumeyucca.yumebox.common.util.toast
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.model.OverrideConfig
+import com.github.yumeyucca.yumebox.feature.override.presentation.viewmodel.OverrideConfigViewModel
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceTemplate // KimiNoBox
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind // KimiNoBox
 import com.github.yumeyucca.yumebox.nodesource.NodeText // KimiNoBox
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.BadgePlus
-import com.github.yumeyucca.yumebox.presentation.viewmodel.OverrideConfigViewModel
+import com.github.yumeyucca.yumebox.presentation.theme.LocalTopBarBackdrop
+import com.github.yumeyucca.yumebox.presentation.theme.UiDp
+import io.github.yumeyucca.lucide.Lucide
+import io.github.yumeyucca.lucide.lucide.Download
+import kotlinx.coroutines.launch // KimiNoBox
 import org.koin.androidx.compose.koinViewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.Scaffold
 
-private data class OverrideListVmState(
-    val builtInConfigs: List<OverrideConfig>,
-    val userConfigs: List<OverrideConfig>,
-    val usageCountMap: Map<String, Int>,
-    val pendingRevealConfigId: String?,
-)
-
-@Composable
-private fun rememberOverrideListVmState(viewModel: OverrideConfigViewModel): OverrideListVmState {
-    val builtInConfigs by viewModel.builtInConfigs.collectAsState()
-    val userConfigs by viewModel.userConfigs.collectAsState()
-    val usageCountMap by viewModel.usageCountMap.collectAsState()
-    val pendingRevealConfigId by viewModel.pendingRevealConfigId.collectAsState()
-    return remember(builtInConfigs, userConfigs, usageCountMap, pendingRevealConfigId) {
-        OverrideListVmState(
-            builtInConfigs = builtInConfigs,
-            userConfigs = userConfigs,
-            usageCountMap = usageCountMap,
-            pendingRevealConfigId = pendingRevealConfigId,
-        )
-    }
-}
-
-private class OverrideListDialogState {
-    val showCreateDialog = mutableStateOf(false)
-    var createDialogMode by mutableStateOf(OverrideConfigInputMode.CreateNew)
-    val showDeleteDialog = mutableStateOf(false)
-    val deleteTargetConfig = mutableStateOf<OverrideConfig?>(null)
-    val exportTargetConfig = mutableStateOf<OverrideConfig?>(null)
-    val applyTargetConfig = mutableStateOf<OverrideConfig?>(null)
-    val nodeEditor = mutableStateOf<NodeEditorTarget?>(null) // KimiNoBox
-    val applyPreselectActive = mutableStateOf(false) // KimiNoBox
-}
-
-@Composable
-private fun rememberOverrideListDialogState(): OverrideListDialogState = remember {
-    OverrideListDialogState()
-}
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OverrideListScreen(
     onOpenCodeEditor: (OverrideConfig) -> Unit,
@@ -93,78 +61,46 @@ fun OverrideListScreen(
     onOpenNodeSource: (String?) -> Unit,
     viewModel: OverrideConfigViewModel = koinViewModel(),
 ) {
-    val vmState = rememberOverrideListVmState(viewModel)
-    val builtInConfigs = vmState.builtInConfigs
-    val userConfigs = vmState.userConfigs
-    val usageCountMap = vmState.usageCountMap
-    val pendingRevealConfigId = vmState.pendingRevealConfigId
+    val builtInConfigs by viewModel.builtInConfigs.collectAsState()
+    val userConfigs by viewModel.userConfigs.collectAsState()
+    val usageCountMap by viewModel.usageCountMap.collectAsState()
+    val pendingRevealConfigId by viewModel.pendingRevealConfigId.collectAsState()
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val scrollBehavior = MiuixScrollBehavior()
 
-    val dialogs = rememberOverrideListDialogState()
-    val showCreateDialog = dialogs.showCreateDialog
-    var createDialogMode by dialogs::createDialogMode
-    val showDeleteDialog = dialogs.showDeleteDialog
-    val deleteTargetConfig = dialogs.deleteTargetConfig
-    val exportTargetConfig = dialogs.exportTargetConfig
-    val applyTargetConfig = dialogs.applyTargetConfig
-    var nodeEditor by dialogs.nodeEditor // KimiNoBox
-    var applyPreselectActive by dialogs.applyPreselectActive // KimiNoBox
+    var dialog by remember { mutableStateOf<OverrideListDialog?>(null) }
+    var exportTargetConfig by remember { mutableStateOf<OverrideConfig?>(null) }
 
     val listState = rememberLazyListState()
-    val createFabController = rememberOverrideFabController()
-    val builtInItems =
-        remember(builtInConfigs, usageCountMap) {
-            builtInConfigs.map { config ->
-                OverrideConfigListItem(
-                    config = config,
-                    isInUse = (usageCountMap[config.id] ?: 0) > 0,
-                    isBuiltIn = true,
-                )
-            }
-        }
-    val userItems =
-        remember(userConfigs, usageCountMap) {
-            userConfigs.map { config ->
-                OverrideConfigListItem(
-                    config = config,
-                    isInUse = (usageCountMap[config.id] ?: 0) > 0,
-                    isBuiltIn = false,
-                )
-            }
-        }
-    // KimiNoBox: node sources get their own section below the imported overrides.
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val builtInItems = remember(builtInConfigs, usageCountMap) { builtInConfigs.toListItems(usageCountMap) }
+    val userItems = remember(userConfigs, usageCountMap) { userConfigs.toListItems(usageCountMap) }
+    // KimiNoBox: node sources get a tab of their own beside the imported overrides
     val nodeSourceItems =
         remember(userItems) { userItems.filter { NodeTemplateKind.of(it.config.content) != null } }
     val importedItems = remember(userItems, nodeSourceItems) { userItems - nodeSourceItems.toSet() }
-    // Reorder only applies to the user section; list indices must skip built-in rows + titles.
-    // Layout: [builtin title?] + N built-in cards + [user title?] + M user cards
-    val userListIndexOffset =
-        remember(builtInItems, importedItems) {
-            val builtinBlock = if (builtInItems.isEmpty()) 0 else 1 + builtInItems.size
-            val userTitle = if (importedItems.isEmpty()) 0 else 1 // KimiNoBox: importedItems
-            builtinBlock + userTitle
-        }
+    var nodeEditor by remember { mutableStateOf<NodeEditorTarget?>(null) } // KimiNoBox
+    val scope = rememberCoroutineScope() // KimiNoBox
+    // One tab row always sits above the cards, so both sections start at index 1.
+    val userListIndexOffset = 1
     val reorderState =
         rememberReorderableLazyListState(listState) { from, to ->
+            if (selectedSectionIndex != 1) return@rememberReorderableLazyListState
             val fromUser = from.index - userListIndexOffset
             val toUser = to.index - userListIndexOffset
             if (fromUser < 0 || toUser < 0) return@rememberReorderableLazyListState
-            // KimiNoBox: the section skips node sources; move within all user configs
+            // KimiNoBox: the tab skips node sources; move within all user configs
             val fromItem = importedItems.getOrNull(fromUser) ?: return@rememberReorderableLazyListState
             val toItem = importedItems.getOrNull(toUser) ?: return@rememberReorderableLazyListState
             viewModel.reorderUserConfigs(userItems.indexOf(fromItem), userItems.indexOf(toItem))
         }
 
     val exportConfigLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.CreateDocument("text/plain")
-        ) { uri ->
-            val targetConfig = exportTargetConfig.value
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            val targetConfig = exportTargetConfig
             if (uri == null || targetConfig == null) {
-                exportTargetConfig.value = null
+                exportTargetConfig = null
                 return@rememberLauncherForActivityResult
             }
 
@@ -172,213 +108,205 @@ fun OverrideListScreen(
                 context.contentResolver.openOutputStream(uri)?.use { output ->
                     output.write(targetConfig.content.toByteArray())
                     output.flush()
-                } ?: error(YumeTxt.Override.Export.Failed.format(targetConfig.name))
+                } ?: error(YumeTxt.Util.Error.UnknownError)
             }
-                .onSuccess {
-                    context.toast(YumeTxt.Override.Export.Success.format(targetConfig.name))
-                }
+                .onSuccess { context.toast(YumeTxt.Override.Export.Success.format(targetConfig.name)) }
                 .onFailure { error ->
-                    context.toast(YumeTxt.Override.Export.Failed.format(error.message))
+                    val reason = error.message ?: YumeTxt.Util.Error.UnknownError
+                    context.toast(YumeTxt.Override.Export.Failed.format(reason))
                 }
 
-            exportTargetConfig.value = null
+            exportTargetConfig = null
         }
 
-    DisposableEffect(lifecycleOwner, viewModel) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refresh()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    val exportConfig: (OverrideConfig) -> Unit = { config ->
+        exportTargetConfig = config
+        exportConfigLauncher.launch("${config.name}.${config.contentType.extension}")
+    }
+
+    // Configs can be edited elsewhere (routing presets, the code editor), so the counts and the
+    // rule-usage map are re-read whenever this list comes back to the foreground.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refresh()
+        onPauseOrDispose {}
     }
 
     // Only jump after an explicit create/import/duplicate. Re-run when list data arrives so we
     // don't consume the pending id before the new row is composed.
-    LaunchedEffect(pendingRevealConfigId, builtInItems, userItems, userListIndexOffset) {
+    LaunchedEffect(
+        pendingRevealConfigId,
+        builtInItems,
+        userItems,
+        selectedSectionIndex,
+        userListIndexOffset,
+    ) {
         val targetId = pendingRevealConfigId ?: return@LaunchedEffect
         val builtInIndex = builtInItems.indexOfFirst { it.config.id == targetId }
-        val userIndex = importedItems.indexOfFirst { it.config.id == targetId } // KimiNoBox
+        val userIndex = importedItems.indexOfFirst { it.config.id == targetId } // KimiNoBox: importedItems
         val nodeSourceIndex = nodeSourceItems.indexOfFirst { it.config.id == targetId } // KimiNoBox
-        val targetIndex =
+        val targetSection =
             when {
-                builtInIndex >= 0 -> (if (builtInItems.isEmpty()) 0 else 1) + builtInIndex
-
-                userIndex >= 0 -> userListIndexOffset + userIndex
-                // KimiNoBox: below the imported cards and the node source title
-                nodeSourceIndex >= 0 ->
-                    userListIndexOffset + importedItems.size + 1 + nodeSourceIndex
+                userIndex >= 0 -> 1
+                nodeSourceIndex >= 0 -> 2 // KimiNoBox
+                builtInIndex >= 0 -> 0
                 else -> return@LaunchedEffect
             }
+        if (selectedSectionIndex != targetSection) {
+            selectedSectionIndex = targetSection
+            return@LaunchedEffect
+        }
+        val targetIndex =
+            userListIndexOffset +
+                when (targetSection) {
+                    0 -> builtInIndex
+                    1 -> userIndex
+                    else -> nodeSourceIndex // KimiNoBox
+                }
         listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
         viewModel.consumePendingRevealConfig(targetId)
     }
 
-    // KimiNoBox: node source forms are drawn in place of the list, so the list state survives them.
-    // After a save the apply sheet opens, the active profile checked while nothing is bound.
+    // KimiNoBox: the self-nodes form is drawn in place of the list, so the list state survives it
     nodeEditor?.let { target ->
         NodeEditorHost(
             target = target,
             viewModel = viewModel,
-            onSaved = { config ->
-                nodeEditor = null
-                applyPreselectActive = true
-                applyTargetConfig.value = config
-            },
+            onSaved = { nodeEditor = null },
             onClose = { nodeEditor = null },
         )
         return
     }
-    // KimiNoBox: a node source opens its screen, or the YAML editor once it was edited by hand.
+    // KimiNoBox: a node source opens its screen, or the YAML editor once it was edited by hand
     val openNodeSource: (OverrideConfig) -> Unit = { config ->
-        val content = viewModel.getConfigContent(config.id) ?: config.content
-        val target = NodeEditorTarget.of(config.copy(content = content))
-        when {
-            NodeSourceTemplate.parse(content) != null -> onOpenNodeSource(config.id)
-            target != null -> nodeEditor = target
-            else -> {
-                context.toast(NodeText.OPENED_AS_YAML)
-                onOpenCodeEditor(config)
+        scope.launch {
+            val content = viewModel.getConfigContent(config.id) ?: config.content
+            val target = NodeEditorTarget.of(config.copy(content = content))
+            when {
+                NodeSourceTemplate.parse(content) != null -> onOpenNodeSource(config.id)
+                target != null -> nodeEditor = target
+                else -> {
+                    context.toast(NodeText.OPENED_AS_YAML)
+                    onOpenCodeEditor(config)
+                }
             }
         }
     }
 
-    Scaffold(
-        floatingActionButton = {
-            OverrideAnimatedFab(
-                controller = createFabController,
-                visible = !showCreateDialog.value,
-                imageVector = Yume.BadgePlus,
-                contentDescription = YumeTxt.Override.Action.Create,
-                onClick = {
-                    createDialogMode = OverrideConfigInputMode.CreateNew
-                    showCreateDialog.value = true
+    GlassScaffold(
+        topBar = {
+            TopBar(
+                title = YumeTxt.Override.Title,
+                scrollBehavior = scrollBehavior,
+                actions = {
+                    GlassTopActionPill(
+                        actions =
+                            listOf(
+                                GlassTopAction(
+                                    icon = Yume.BadgePlus,
+                                    contentDescription = YumeTxt.Override.Action.Create,
+                                    onClick = { dialog = OverrideListDialog.Create(OverrideConfigInputMode.CreateNew) },
+                                ),
+                                GlassTopAction(
+                                    icon = Lucide.Download,
+                                    contentDescription = YumeTxt.Override.Action.NetworkImport,
+                                    onClick = { dialog = OverrideListDialog.Create(OverrideConfigInputMode.LocalFile) },
+                                ),
+                            ),
+                        backdrop = LocalTopBarBackdrop.current,
+                    )
                 },
             )
-        },
-        topBar = { TopBar(title = YumeTxt.Override.Title, scrollBehavior = scrollBehavior) },
+        }
     ) { paddingValues ->
-        val mainLikePadding = rememberStandalonePageMainPadding()
-        ScreenLazyColumn(
+        StandalonePageList(
             scrollBehavior = scrollBehavior,
-            innerPadding = combinePaddingValues(paddingValues, mainLikePadding),
+            scaffoldPadding = paddingValues,
             lazyListState = listState,
-            onScrollDirectionChanged = createFabController::onScrollDirectionChanged,
         ) {
-            // Built-ins first. No empty-state placeholder — with bundled overrides the list is
-            // never blank.
-            if (builtInItems.isNotEmpty()) {
-                item(key = "section-builtin", contentType = "section-title") {
-                    Title(YumeTxt.Override.Section.BuiltIn)
-                }
+            stickySegmentedTabs(
+                key = "__override_sections__",
+                tabs =
+                    listOf(
+                        YumeTxt.Override.Section.BuiltIn,
+                        YumeTxt.Override.Section.User,
+                        NodeText.SECTION, // KimiNoBox
+                    ),
+                selectedTabIndex = selectedSectionIndex,
+                onTabSelected = { selectedSectionIndex = it },
+                tabHeight = UiDp.dp42,
+            )
+
+            if (selectedSectionIndex == 0) {
                 items(
                     items = builtInItems,
                     key = { it.config.id },
                     contentType = { "override-builtin-card" },
                 ) { item ->
-                    val config = item.config
-                    OverrideConfigCard(
-                        config = config,
-                        isDragging = false,
-                        isInUse = item.isInUse,
+                    OverrideCardSlot(
+                        item = item,
                         isBuiltIn = true,
-                        onApply = { applyTargetConfig.value = config },
-                        onExport = {
-                            exportTargetConfig.value = config
-                            exportConfigLauncher.launch(
-                                "${config.name}.${config.contentType.extension}"
-                            )
-                        },
-                        onEdit = { onOpenCodeEditor(config) },
+                        isDragging = false,
+                        onExport = exportConfig,
+                        onEdit = onOpenCodeEditor,
+                        onRename = { dialog = OverrideListDialog.Rename(it) },
                         onDelete = null,
-                        enableDrag = false,
                     )
                 }
-            }
-
-            // "导入覆写" section only appears when the user actually has imports — no empty title/hint.
-            if (importedItems.isNotEmpty()) { // KimiNoBox: importedItems
-                item(key = "section-user", contentType = "section-title") {
-                    Title(YumeTxt.Override.Section.User)
-                }
+            } else if (selectedSectionIndex == 1) {
                 items(
                     items = importedItems, // KimiNoBox
                     key = { it.config.id },
                     contentType = { "override-config-card" },
                 ) { item ->
-                    val config = item.config
-                    ReorderableItem(state = reorderState, key = config.id) { isDragging ->
-                        OverrideConfigCard(
-                            config = config,
-                            isDragging = isDragging,
-                            isInUse = item.isInUse,
+                    ReorderableItem(state = reorderState, key = item.config.id) { isDragging ->
+                        OverrideCardSlot(
+                            item = item,
                             isBuiltIn = false,
-                            onApply = { applyTargetConfig.value = config },
-                            onExport = {
-                                exportTargetConfig.value = config
-                                exportConfigLauncher.launch(
-                                    "${config.name}.${config.contentType.extension}"
-                                )
-                            },
-                            onEdit = { onOpenCodeEditor(config) },
-                            onDelete = {
-                                deleteTargetConfig.value = config
-                                showDeleteDialog.value = true
-                            },
-                            enableDrag = true,
+                            isDragging = isDragging,
+                            onExport = exportConfig,
+                            onEdit = onOpenCodeEditor,
+                            onRename = { dialog = OverrideListDialog.Rename(it) },
+                            onDelete = { viewModel.deleteConfig(it.id) },
+                            modifier = Modifier.longPressDraggableHandle(),
                         )
                     }
                 }
-            }
-
-            // KimiNoBox: node sources, edited through their form
-            if (nodeSourceItems.isNotEmpty()) {
-                item(key = "section-node-source", contentType = "section-title") {
-                    Title(NodeText.SECTION)
-                }
+            } else {
+                // KimiNoBox: node sources, edited through their form
                 items(
                     items = nodeSourceItems,
                     key = { it.config.id },
                     contentType = { "override-node-source-card" },
                 ) { item ->
-                    val config = item.config
-                    OverrideConfigCard(
-                        config = config,
-                        isDragging = false,
-                        isInUse = item.isInUse,
+                    OverrideCardSlot(
+                        item = item,
                         isBuiltIn = false,
-                        onApply = { applyTargetConfig.value = config },
-                        onExport = {
-                            exportTargetConfig.value = config
-                            exportConfigLauncher.launch(
-                                "${config.name}.${config.contentType.extension}"
-                            )
-                        },
-                        onEdit = { openNodeSource(config) },
-                        onDelete = {
-                            deleteTargetConfig.value = config
-                            showDeleteDialog.value = true
-                        },
-                        enableDrag = false,
+                        isDragging = false,
+                        onExport = exportConfig,
+                        onEdit = openNodeSource,
+                        onRename = { dialog = OverrideListDialog.Rename(it) },
+                        onDelete = { viewModel.deleteConfig(it.id) },
                     )
                 }
             }
         }
 
+        val createDialog = dialog as? OverrideListDialog.Create
         CreateConfigDialog(
-            show = showCreateDialog,
-            initialMode = createDialogMode,
+            show = createDialog != null,
+            initialMode = createDialog?.mode ?: OverrideConfigInputMode.CreateNew,
             onConfirmCreate = { name, contentType ->
                 viewModel.createConfig(name = name, contentType = contentType)
-                showCreateDialog.value = false
+                dialog = null
             },
-            onConfirmImport = viewModel::importConfig,
+            onConfirmImport = { content, sourceName ->
+                viewModel.importConfig(content = content, sourceName = sourceName)
+            },
             onConfirmNetworkImport = viewModel::importConfigFromUrl,
-            onDismiss = { showCreateDialog.value = false },
+            onDismiss = { dialog = null },
             // KimiNoBox
             onConfirmTemplate = { kind ->
-                showCreateDialog.value = false
+                dialog = null
                 when (kind) {
                     NodeTemplateKind.NodeSource -> onOpenNodeSource(null)
                     NodeTemplateKind.SelfNodes -> nodeEditor = NodeEditorTarget.NewSelfNodes
@@ -386,35 +314,61 @@ fun OverrideListScreen(
             },
         )
 
-        DeleteConfirmDialog(
-            show = showDeleteDialog,
-            config = deleteTargetConfig.value,
-            viewModel = viewModel,
-            onConfirm = {
-                deleteTargetConfig.value?.id?.let(viewModel::deleteConfig)
-                deleteTargetConfig.value = null
-                showDeleteDialog.value = false
+        val renameDialog = dialog as? OverrideListDialog.Rename
+        RenameConfigDialog(
+            show = renameDialog != null,
+            config = renameDialog?.config,
+            onConfirm = { newName ->
+                renameDialog?.config?.id?.let { id -> viewModel.renameConfig(id, newName) }
+                dialog = null
             },
-            onDismiss = {
-                deleteTargetConfig.value = null
-                showDeleteDialog.value = false
-            },
-        )
-
-        OverrideApplyToProfilesSheet(
-            target = applyTargetConfig.value,
-            viewModel = viewModel,
-            onDismiss = {
-                applyTargetConfig.value = null
-                applyPreselectActive = false // KimiNoBox
-            },
-            preselectActive = applyPreselectActive, // KimiNoBox
+            onDismiss = { dialog = null },
         )
     }
+}
+
+/** 这一页同一时间只会有一个弹窗,所以用一个槽位表达,而不是几个互斥的布尔值。 */
+private sealed interface OverrideListDialog {
+    data class Create(val mode: OverrideConfigInputMode) : OverrideListDialog
+
+    data class Rename(val config: OverrideConfig) : OverrideListDialog
+}
+
+/** 内置表与用户表共用同一张卡,差别只在外面的拖拽壳和有没有删除入口。 */
+@Composable
+private fun OverrideCardSlot(
+    item: OverrideConfigListItem,
+    isBuiltIn: Boolean,
+    isDragging: Boolean,
+    onExport: (OverrideConfig) -> Unit,
+    onEdit: (OverrideConfig) -> Unit,
+    onRename: (OverrideConfig) -> Unit,
+    onDelete: ((OverrideConfig) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val config = item.config
+    OverrideConfigCard(
+        config = config,
+        isDragging = isDragging,
+        isInUse = item.isInUse,
+        isBuiltIn = isBuiltIn,
+        onExport = { onExport(config) },
+        onEdit = { onEdit(config) },
+        onRename = { onRename(config) },
+        onDelete = onDelete?.let { delete -> { delete(config) } },
+        modifier = modifier,
+    )
 }
 
 private data class OverrideConfigListItem(
     val config: OverrideConfig,
     val isInUse: Boolean,
-    val isBuiltIn: Boolean = false,
 )
+
+private fun List<OverrideConfig>.toListItems(usageCountMap: Map<String, Int>): List<OverrideConfigListItem> =
+    map { config ->
+        OverrideConfigListItem(
+            config = config,
+            isInUse = (usageCountMap[config.id] ?: 0) > 0,
+        )
+    }

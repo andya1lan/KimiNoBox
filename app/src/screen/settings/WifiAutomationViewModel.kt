@@ -21,16 +21,35 @@ import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
 import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.runtime.client.ProfilesRepository
 import com.github.yumeyucca.yumebox.runtime.service.WifiAutomationService
+import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidNetwork
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidObservation
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidObserver
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidScanResult
 import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidScanner
-import com.github.yumeyucca.yumebox.runtime.service.session.WifiSsidNetwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
+
+/**
+ * Scan lifecycle of the manual-add sheet.
+ *
+ * [Results] carries the networks it renders so the list can never drift from the phase it belongs to; [Idle] is the
+ * state before the first scan finishes, where the sheet shows nothing but its chrome.
+ */
+sealed interface WifiScanPhase {
+    data object Idle : WifiScanPhase
+
+    data object Scanning : WifiScanPhase
+
+    data object Unavailable : WifiScanPhase
+
+    data object Empty : WifiScanPhase
+
+    data class Results(val networks: List<WifiSsidNetwork>) : WifiScanPhase
+}
 
 class WifiAutomationViewModel(
     application: Application,
@@ -47,10 +66,7 @@ class WifiAutomationViewModel(
         val noWifiAction: WifiAutomationFallbackAction = WifiAutomationFallbackAction.Keep,
         val otherWifiProfileUuid: String? = null,
         val noWifiProfileUuid: String? = null,
-        val isScanning: Boolean = false,
-        val scanCompleted: Boolean = false,
-        val scannedNetworks: List<WifiSsidNetwork> = emptyList(),
-        val scanUnavailable: Boolean = false,
+        val scanPhase: WifiScanPhase = WifiScanPhase.Idle,
     )
 
     sealed interface Effect {
@@ -65,14 +81,7 @@ class WifiAutomationViewModel(
         data object ScanUnavailable : Effect
     }
 
-    private data class ScanState(
-        val isScanning: Boolean = false,
-        val scanCompleted: Boolean = false,
-        val networks: List<WifiSsidNetwork> = emptyList(),
-        val unavailable: Boolean = false,
-    )
-
-    private val scanState = MutableStateFlow(ScanState())
+    private val scanPhase = MutableStateFlow<WifiScanPhase>(WifiScanPhase.Idle)
     private var scanJob: Job? = null
 
     private val profiles = MutableStateFlow<List<Profile>>(emptyList())
@@ -98,31 +107,24 @@ class WifiAutomationViewModel(
 
     val uiState: StateFlow<UiState> =
         combine(
-            settingsState,
-            settings.wifiAutomationOtherWifiAction.state,
-            settings.wifiAutomationNoWifiAction.state,
-            profiles,
-        ) { state, otherWifiAction, noWifiAction, profiles ->
-            state.copy(
-                otherWifiAction = otherWifiAction,
-                noWifiAction = noWifiAction,
-                profiles = profiles,
-            )
-        }
+                settingsState,
+                settings.wifiAutomationOtherWifiAction.state,
+                settings.wifiAutomationNoWifiAction.state,
+                profiles,
+            ) { state, otherWifiAction, noWifiAction, profiles ->
+                state.copy(
+                    otherWifiAction = otherWifiAction,
+                    noWifiAction = noWifiAction,
+                    profiles = profiles,
+                )
+            }
             .combine(settings.wifiAutomationOtherWifiProfileUuid.state) { state, profileUuid ->
                 state.copy(otherWifiProfileUuid = profileUuid.ifBlank { null })
             }
             .combine(settings.wifiAutomationNoWifiProfileUuid.state) { state, profileUuid ->
                 state.copy(noWifiProfileUuid = profileUuid.ifBlank { null })
             }
-            .combine(scanState) { state, scan ->
-                state.copy(
-                    isScanning = scan.isScanning,
-                    scanCompleted = scan.scanCompleted,
-                    scannedNetworks = scan.networks,
-                    scanUnavailable = scan.unavailable,
-                )
-            }
+            .combine(scanPhase) { state, phase -> state.copy(scanPhase = phase) }
             .stateInWhileSubscribed(
                 viewModelScope,
                 UiState(
@@ -137,7 +139,13 @@ class WifiAutomationViewModel(
                 ),
             )
 
-    private val _effects = MutableSharedFlow<Effect>()
+    // Buffered, so an effect raised while the screen is not collecting parks here instead of
+    // suspending the coroutine that raised it.
+    private val _effects =
+        MutableSharedFlow<Effect>(
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
     val effects = _effects.asSharedFlow()
 
     fun enable() {
@@ -169,24 +177,29 @@ class WifiAutomationViewModel(
 
     fun addManualSsid(
         rawSsid: String,
-        action: WifiAutomationAction = WifiAutomationAction.Start,
-        profileUuid: String? = null,
+        action: WifiAutomationAction,
+        profileUuid: String?,
     ) {
         val ssid = WifiSsidObserver.normalizeSsid(rawSsid) ?: return
         addRule(ssid, action, profileUuid)
     }
 
     fun scanWifi() {
-        if (scanState.value.isScanning) return
-        scanState.value = ScanState(isScanning = true)
+        if (scanPhase.value == WifiScanPhase.Scanning) return
+        scanPhase.value = WifiScanPhase.Scanning
         scanJob = viewModelScope.launch {
             when (val result = WifiSsidScanner.scanOnce(getApplication())) {
                 is WifiSsidScanResult.Success -> {
-                    scanState.value = ScanState(scanCompleted = true, networks = result.networks)
+                    scanPhase.value =
+                        if (result.networks.isEmpty()) {
+                            WifiScanPhase.Empty
+                        } else {
+                            WifiScanPhase.Results(result.networks)
+                        }
                 }
 
                 WifiSsidScanResult.Unavailable -> {
-                    scanState.value = ScanState(scanCompleted = true, unavailable = true)
+                    scanPhase.value = WifiScanPhase.Unavailable
                     _effects.emit(Effect.ScanUnavailable)
                 }
             }
@@ -196,7 +209,7 @@ class WifiAutomationViewModel(
     fun resetScan() {
         scanJob?.cancel()
         scanJob = null
-        scanState.value = ScanState()
+        scanPhase.value = WifiScanPhase.Idle
     }
 
     fun addCurrentSsid() {

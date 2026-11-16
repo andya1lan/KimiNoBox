@@ -23,6 +23,7 @@ import com.github.yumeyucca.yumebox.runtime.service.core.PreviewCoreProcess
 import com.github.yumeyucca.yumebox.runtime.service.profile.ImportedDao
 import com.github.yumeyucca.yumebox.runtime.service.session.CompiledConfigPipeline
 import com.github.yumeyucca.yumebox.runtime.service.session.SessionRuntimeSpecFactory
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,7 +34,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.util.concurrent.atomic.AtomicLong
 
 /** Snapshot published by the inspect-only process. Empty groups are a valid, but non-displayable, config. */
 data class PreviewNodeState(
@@ -43,9 +43,9 @@ data class PreviewNodeState(
 )
 
 /**
- * Foreground-only owner for the preview shell. Callers explicitly suspend it before a real core
- * launch and resume it after an idle transition; this keeps preview independent from VPN/Root
- * ownership and makes the handoff observable instead of racing two controllers.
+ * Foreground-only owner for the preview shell. Callers explicitly suspend it before a real core launch and resume it
+ * after an idle transition; this keeps preview independent from VPN/Root ownership and makes the handoff observable
+ * instead of racing two controllers.
  */
 class PreviewRuntimeManager(
     context: Context,
@@ -64,36 +64,45 @@ class PreviewRuntimeManager(
     private var proxyToGroupIndex: Map<String, List<Int>> = emptyMap()
     val state: StateFlow<PreviewNodeState> = _state.asStateFlow()
 
-    /** Local storage only: preview must not depend on the service/controller backend being alive. */
-    fun hasActiveProfile(): Boolean =
-        serviceStore.activeProfile?.let(ImportedDao::queryByUUID) != null
+    /**
+     * Local storage only: preview must not depend on the service/controller backend being alive.
+     *
+     * Not a cheap flag though — it reads the persisted active profile through [ImportedDao], so a main-thread caller
+     * has to hop to IO first.
+     */
+    fun hasActiveProfile(): Boolean = serviceStore.activeProfile?.let(ImportedDao::queryByUUID) != null
 
-    suspend fun ensureRunning() {
-        val requestGeneration = generation.get()
-        mutex.withLock {
-            if (generation.get() != requestGeneration) return@withLock
-            // Startup, the home page, and the node page can request the first snapshot together.
-            // Compile under the same transaction as launch/readiness so they reuse one result.
-            val compiled = pipeline.compile(factory.createPreviewSpec())
-            if (generation.get() != requestGeneration) return@withLock
-            // Several UI surfaces ask for the initial node snapshot at once. Keep the launch and
-            // first controller read in one transaction: otherwise a second caller can replace a
-            // still-booting PID before it has created preview.sock.
-            if (process.isAlive() && _state.value.ready && _state.value.fingerprint == compiled.fingerprint) {
-                return@withLock
-            }
-            if (!process.isAlive() || _state.value.fingerprint != compiled.fingerprint) {
-                delayOverlay.clear()
-                process.start(compiled.finalYaml)
-            }
-            val groups = awaitGroups(requestGeneration)
-            if (generation.get() == requestGeneration && process.isAlive()) {
-                _state.value =
-                    PreviewNodeState(fingerprint = compiled.fingerprint, groups = groups, ready = true)
-                delayStore.publishProxyGroups(groups)
+    /**
+     * Compiles the preview config and forks the inspect-only process. Every caller is a UI coroutine, and all of it
+     * blocks: file IO, `PackageManager`, `Process.start` and socket writes, queued behind the lifecycle lock. Running
+     * that on Main is an ANR waiting for a slow `su`.
+     */
+    suspend fun ensureRunning() =
+        withContext(Dispatchers.IO) {
+            val requestGeneration = generation.get()
+            mutex.withLock {
+                if (generation.get() != requestGeneration) return@withLock
+                // Startup, the home page, and the node page can request the first snapshot together.
+                // Compile under the same transaction as launch/readiness so they reuse one result.
+                val compiled = pipeline.compile(factory.createPreviewSpec())
+                if (generation.get() != requestGeneration) return@withLock
+                // Several UI surfaces ask for the initial node snapshot at once. Keep the launch and
+                // first controller read in one transaction: otherwise a second caller can replace a
+                // still-booting PID before it has created preview.sock.
+                if (process.isAlive() && _state.value.ready && _state.value.fingerprint == compiled.fingerprint) {
+                    return@withLock
+                }
+                if (!process.isAlive() || _state.value.fingerprint != compiled.fingerprint) {
+                    delayOverlay.clear()
+                    process.start(compiled.finalYaml)
+                }
+                val groups = awaitGroups(requestGeneration)
+                if (generation.get() == requestGeneration && process.isAlive()) {
+                    _state.value = PreviewNodeState(fingerprint = compiled.fingerprint, groups = groups, ready = true)
+                    delayStore.publishProxyGroups(groups)
+                }
             }
         }
-    }
 
     /** Never wait for config compilation or a controller readiness retry on the real-core handoff. */
     fun stop() {
@@ -136,8 +145,7 @@ class PreviewRuntimeManager(
         val previewGeneration = generation.get()
         mutex.withLock {
             if (!isCurrentGeneration(previewGeneration)) return@withLock
-            val refreshed =
-                mergeReportedDelays(listOf(process.controller().queryProxyGroup(name, sort))).first()
+            val refreshed = mergeReportedDelays(listOf(process.controller().queryProxyGroup(name, sort))).first()
             if (!isCurrentGeneration(previewGeneration)) return@withLock
             val previous = _state.value
             val merged =
@@ -151,7 +159,7 @@ class PreviewRuntimeManager(
     }
 
     private suspend fun refreshGroups(previewGeneration: Long) {
-        val incoming = process.controller().queryAllProxyGroups(false)
+        val incoming = process.controller().queryAllProxyGroups()
         if (!isCurrentGeneration(previewGeneration)) {
             return
         }
@@ -165,24 +173,26 @@ class PreviewRuntimeManager(
     private fun mergeReportedDelays(incoming: List<ProxyGroup>): List<ProxyGroup> {
         delayOverlay.prune(membersByGroup(incoming.map { group -> group.name to group.proxies }))
         val previousByGroup = _state.value.groups.associateBy(ProxyGroup::name)
-        return incoming.map { group ->
-            val previousByProxy = previousByGroup[group.name]?.proxies?.associateBy { it.name }
-            group.copy(
-                proxies =
-                    group.proxies.map { proxy ->
-                        val previousDelay = previousByProxy?.get(proxy.name)?.delay
-                        proxy.copy(
-                            delay =
-                                delayOverlay.mergeDelay(
-                                    groupName = group.name,
-                                    proxyName = proxy.name,
-                                    reportedDelay = proxy.delay,
-                                    previousDelay = previousDelay,
-                                )
-                        )
-                    }
-            )
-        }.let(delayOverlay::paintProxyGroups)
+        return incoming
+            .map { group ->
+                val previousByProxy = previousByGroup[group.name]?.proxies?.associateBy { it.name }
+                group.copy(
+                    proxies =
+                        group.proxies.map { proxy ->
+                            val previousDelay = previousByProxy?.get(proxy.name)?.delay
+                            proxy.copy(
+                                delay =
+                                    delayOverlay.mergeDelay(
+                                        groupName = group.name,
+                                        proxyName = proxy.name,
+                                        reportedDelay = proxy.delay,
+                                        previousDelay = previousDelay,
+                                    )
+                            )
+                        }
+                )
+            }
+            .let(delayOverlay::paintProxyGroups)
     }
 
     /** Refreshes the groups under the lock, then probes outside it so selection reads stay live. */
@@ -207,13 +217,13 @@ class PreviewRuntimeManager(
         val measured =
             withContext(Dispatchers.Default) {
                 ProxyDelayTestSession(
-                    targets = planProxyDelayTests(groupNames(proxiesByGroup), proxiesByGroup),
-                    isActive = { isCurrentGeneration(previewGeneration) },
-                    onResult = { batch -> recordDirectDelays(previewGeneration, batch) },
-                    measureNode = { proxyName -> controller.healthCheckProxy(proxyName) },
-                    measureGroup = { groupName -> controller.healthCheck(groupName) },
-                    onProgress = onProgress,
-                )
+                        targets = planProxyDelayTests(groupNames(proxiesByGroup), proxiesByGroup),
+                        isActive = { isCurrentGeneration(previewGeneration) },
+                        onResult = { batch -> recordDirectDelays(previewGeneration, batch) },
+                        measureNode = { proxyName -> controller.healthCheckProxy(proxyName) },
+                        measureGroup = { groupName -> controller.healthCheck(groupName) },
+                        onProgress = onProgress,
+                    )
                     .run()
             } ?: return
         mutex.withLock { commitDirectDelays(previewGeneration, measured) }
@@ -234,8 +244,7 @@ class PreviewRuntimeManager(
             val affectedMembers = HashMap<String, MutableSet<String>>()
             measured.keys.forEach { name ->
                 index[name]?.forEach { groupIndex ->
-                    affectedMembers.getOrPut(currentGroups[groupIndex].name) { mutableSetOf() } +=
-                        name
+                    affectedMembers.getOrPut(currentGroups[groupIndex].name) { mutableSetOf() } += name
                 }
             }
             if (affectedMembers.isNotEmpty()) delayOverlay.recordDelays(measured, affectedMembers)
@@ -247,9 +256,7 @@ class PreviewRuntimeManager(
         if (indexedGroups !== groups) {
             val index = HashMap<String, MutableList<Int>>()
             groups.forEachIndexed { groupIndex, group ->
-                group.proxies.forEach { proxy ->
-                    index.getOrPut(proxy.name) { mutableListOf() } += groupIndex
-                }
+                group.proxies.forEach { proxy -> index.getOrPut(proxy.name) { mutableListOf() } += groupIndex }
             }
             indexedGroups = groups
             proxyToGroupIndex = index
@@ -269,9 +276,7 @@ class PreviewRuntimeManager(
             if (measured.isEmpty()) {
                 previous.groups
             } else {
-                previous.groups.map { group ->
-                    group.copy(proxies = group.proxies.withDelays(measured))
-                }
+                previous.groups.map { group -> group.copy(proxies = group.proxies.withDelays(measured)) }
             }
         val painted = delayOverlay.paintProxyGroups(merged)
         _state.value = previous.copy(groups = painted)
@@ -288,7 +293,10 @@ class PreviewRuntimeManager(
                 if (generation.get() != requestGeneration || !process.isAlive()) {
                     throw CancellationException("preview handoff requested")
                 }
-                groups = runCatching { process.controller().queryAllProxyGroups(false) }.getOrNull()
+                groups =
+                    runCatching { process.controller().queryAllProxyGroups() }
+                        .onFailure { error -> if (error is CancellationException) throw error }
+                        .getOrNull()
                 if (groups == null) delay(CONTROLLER_RETRY_MS)
             }
             groups

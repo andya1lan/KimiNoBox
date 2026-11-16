@@ -2,6 +2,8 @@ modules:
   - api
   - app
   - build-logic
+  - build-logic/ktfmt
+  - build-logic/miuix-glass
   - common
   - core
   - data
@@ -19,3 +21,10 @@ modules:
   - ui
 plugins:
   - ./build-logic
+  - ./build-logic/ktfmt
+  - ./build-logic/miuix-glass
+
+
+
+
+

@@ -20,7 +20,7 @@
 
 @file:Suppress("FunctionName")
 
-package com.github.yumeyucca.yumebox.presentation.screen
+package com.github.yumeyucca.yumebox.feature.override.presentation.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -34,7 +34,7 @@ import com.github.yumeyucca.yumebox.nodesource.NodeTemplateKind
 import com.github.yumeyucca.yumebox.nodesource.NodeTemplates
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesForm
 import com.github.yumeyucca.yumebox.nodesource.SelfNodesTemplate
-import com.github.yumeyucca.yumebox.presentation.viewmodel.OverrideConfigViewModel
+import com.github.yumeyucca.yumebox.feature.override.presentation.viewmodel.OverrideConfigViewModel
 import org.koin.compose.koinInject
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 

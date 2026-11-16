@@ -30,14 +30,16 @@ import android.os.Build
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.service.util.ServiceLogoIcons
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import timber.log.Timber
 
 class DialerReceiver : BroadcastReceiver() {
     companion object {
-        private const val NOTIFICATION_ID = 1102
+        // 1001/1002 are the foreground services, 1101 auto restart, 1102 Wi-Fi automation: a
+        // shared id would replace another component's notification with this transient one.
+        private const val NOTIFICATION_ID = 1103
         private const val CHANNEL_ID = "secret_code"
     }
 

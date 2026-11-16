@@ -18,6 +18,7 @@ concurrency:
 
 permissions:
   contents: write
+  packages: read # lucide-compose comes from GitHub Packages
   attestations: write
   id-token: write
 

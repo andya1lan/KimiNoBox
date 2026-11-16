@@ -28,8 +28,10 @@ import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -65,6 +67,7 @@ internal object GeoXUpdate {
         client: GeoXDownloadClient,
         items: List<GeoXItem>,
         vpnRunning: () -> Boolean,
+        onDone: () -> Unit = {},
     ) {
         if (!running.compareAndSet(false, true)) {
             context.toast("GeoX 正在更新，完成后会提示")
@@ -77,6 +80,7 @@ internal object GeoXUpdate {
                 if (result.failed.isEmpty()) context.toast(message) else showToastDialog(message)
             } finally {
                 running.set(false)
+                withContext(Dispatchers.Main + NonCancellable) { onDone() }
             }
         }
     }

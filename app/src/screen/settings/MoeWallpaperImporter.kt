@@ -23,20 +23,20 @@ package com.github.yumeyucca.yumebox.screen.settings
 import android.content.Context
 import androidx.core.net.toUri
 import com.github.yumeyucca.yumebox.core.util.moeWallpaperFile
+import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
- * Copies the Moe wallpaper from an external `sourceUri` (typically a `content://` URI from the
- * photo picker) into the app-private files dir, so rendering survives deletion/permission loss of
- * the original source.
+ * Copies the Moe wallpaper from an external `sourceUri` (typically a `content://` URI from the photo picker) into the
+ * app-private files dir, so rendering survives deletion/permission loss of the original source.
  *
- * The copy is written to a temp file then renamed over the stable slot, so a half-written copy
- * never replaces a good one (storage-failure edge case).
+ * The copy is written to a temp file then renamed over the stable slot, so a half-written copy never replaces a good
+ * one (storage-failure edge case).
  *
- * @return a `file://` URI pointing at the local copy on success, or `null` if the source could not
- *   be read (caller should fall back to the original source URI in that case).
+ * @return a `file://` URI pointing at the local copy on success, or `null` if the source could not be read (caller
+ *   should fall back to the original source URI in that case).
  */
 object MoeWallpaperImporter {
     suspend fun importToLocal(context: Context, sourceUri: String): String? =
@@ -54,6 +54,11 @@ object MoeWallpaperImporter {
                 }
                 "file://${target.absolutePath}"
             }
+                .onFailure { error ->
+                    // Cancellation is not an import failure: reporting null here would make the
+                    // caller keep the old wallpaper as if the copy had simply failed.
+                    if (error is CancellationException) throw error
+                }
                 .getOrNull()
         }
 }

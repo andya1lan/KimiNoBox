@@ -22,20 +22,21 @@
 
 package com.github.yumeyucca.yumebox.screen.settings
 
-
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.viewModelScope
 import com.github.yumeyucca.yumebox.common.util.stateInWhileSubscribed
-import com.github.yumeyucca.yumebox.core.presentation.AndroidContractStateViewModel
-import com.github.yumeyucca.yumebox.core.presentation.LoadableState
 import com.github.yumeyucca.yumebox.data.controller.AccessControlController
+import com.github.yumeyucca.yumebox.data.model.AccessControlImportStrategy
 import com.github.yumeyucca.yumebox.data.model.AccessControlMode
 import com.github.yumeyucca.yumebox.data.model.AccessControlSortMode
 import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
+import com.github.yumeyucca.yumebox.presentation.base.AndroidContractStateViewModel
+import com.github.yumeyucca.yumebox.presentation.base.LoadableState
 import com.github.yumeyucca.yumebox.runtime.service.root.RootPackageShell
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -49,14 +50,15 @@ class AccessControlViewModel(
     private val controller: AccessControlController,
 ) :
     AndroidContractStateViewModel<
-            AccessControlViewModel.UiState,
-            AccessControlViewModel.AccessControlUiEffect,
-            >(
+        AccessControlViewModel.UiState,
+        AccessControlViewModel.AccessControlUiEffect,
+    >(
         application,
         UiState(
             showSystemApps = settings.accessControlShowSystemApps.value,
             sortMode = settings.accessControlSortMode.value,
             selectedFirst = settings.accessControlSelectedFirst.value,
+            importStrategy = settings.accessControlImportStrategy.value,
         ),
     ) {
     data class AppInfo(
@@ -72,14 +74,15 @@ class AccessControlViewModel(
         val apps: List<AppInfo> = emptyList(),
         val selectedPackages: Set<String> = emptySet(),
         /**
-         * Selection snapshot used for ordering the currently visible list. It is refreshed when
-         * the screen is entered, so changing a checkbox does not immediately move that row.
+         * Selection snapshot used for ordering the currently visible list. It is refreshed when the screen is entered,
+         * so changing a checkbox does not immediately move that row.
          */
         val initialSelectedPackages: Set<String> = emptySet(),
         val searchQuery: String = "",
         val showSystemApps: Boolean = false,
         val sortMode: AccessControlSortMode = AccessControlSortMode.LABEL,
         val selectedFirst: Boolean = true,
+        val importStrategy: AccessControlImportStrategy = AccessControlImportStrategy.MERGE,
         val needsMiuiPermission: Boolean = false,
         val permissionBanner: Boolean = false, // KimiNoBox: installed-apps permission banner
         override val message: String? = null,
@@ -115,7 +118,7 @@ class AccessControlViewModel(
     }
 
     init {
-        checkAndLoad()
+        checkAndLoad() // KimiNoBox: the installed-apps permission flow (InstalledAppsPermission)
     }
 
     // KimiNoBox: permission state for the FlClash-style flow (see InstalledAppsPermission)
@@ -186,11 +189,9 @@ class AccessControlViewModel(
             val apps = runCatching {
                 withContext(Dispatchers.IO) { loadInstalledApps() }
             }
-                .getOrElse {
-                    _uiState.update { state ->
-                        state.copy(isLoading = false, needsMiuiPermission = true)
-                    }
-                    return@launch
+                .getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    emptyList()
                 }
 
             _uiState.update { state ->
@@ -206,8 +207,8 @@ class AccessControlViewModel(
     }
 
     /**
-     * Synchronize selection-related state when the screen becomes visible again. The ViewModel is
-     * activity-scoped by the Compose Koin owner, so navigating away does not recreate it.
+     * Synchronize selection-related state when the screen becomes visible again. The ViewModel is activity-scoped by
+     * the Compose Koin owner, so navigating away does not recreate it.
      */
     fun refreshSelection() {
         val selectedPackages = settings.accessControlPackages.value
@@ -234,18 +235,27 @@ class AccessControlViewModel(
                 }
             }
 
-        return packages
-            .filter { it.packageName != selfPackageName }
-            .map { appInfo ->
-                val pkgInfo = runCatching { pm.getPackageInfo(appInfo.packageName, 0) }.getOrNull()
-                AppInfo(
-                    packageName = appInfo.packageName,
-                    label = appInfo.loadLabel(pm).toString(),
-                    isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
-                    installTime = pkgInfo?.firstInstallTime ?: 0L,
-                    updateTime = pkgInfo?.lastUpdateTime ?: 0L,
-                )
+        val visiblePackages = packages.filter { it.packageName != selfPackageName }
+        // HyperOS returns an empty (or system-only) list instead of throwing when the app-list
+        // permission is missing, so the SecurityException fallback above never runs. Use root
+        // whenever no third-party package is visible.
+        val resolvedPackages =
+            if (visiblePackages.any { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }) {
+                visiblePackages
+            } else {
+                loadInstalledAppsFromRoot(pm, selfPackageName)
             }
+
+        return resolvedPackages.map { appInfo ->
+            val pkgInfo = runCatching { pm.getPackageInfo(appInfo.packageName, 0) }.getOrNull()
+            AppInfo(
+                packageName = appInfo.packageName,
+                label = appInfo.loadLabel(pm).toString(),
+                isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                installTime = pkgInfo?.firstInstallTime ?: 0L,
+                updateTime = pkgInfo?.lastUpdateTime ?: 0L,
+            )
+        }
     }
 
     private fun loadInstalledAppsFromRoot(
@@ -260,8 +270,7 @@ class AccessControlViewModel(
             .asSequence()
             .filterNot { it == selfPackageName }
             .mapNotNull { packageName ->
-                runCatching { pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA) }
-                    .getOrNull()
+                runCatching { pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA) }.getOrNull()
             }
             .toList()
     }
@@ -277,15 +286,14 @@ class AccessControlViewModel(
         val filtered = apps.filter { app ->
             val matchesQuery =
                 query.isEmpty() ||
-                        app.label.contains(query, ignoreCase = true) ||
-                        app.packageName.contains(query, ignoreCase = true)
+                    app.label.contains(query, ignoreCase = true) ||
+                    app.packageName.contains(query, ignoreCase = true)
             val matchesSystemFilter = showSystemApps || !app.isSystemApp
             matchesQuery && matchesSystemFilter
         }
         val comparator =
             when (sortMode) {
-                AccessControlSortMode.PACKAGE_NAME ->
-                    compareBy<AppInfo> { it.packageName.lowercase() }
+                AccessControlSortMode.PACKAGE_NAME -> compareBy<AppInfo> { it.packageName.lowercase() }
 
                 AccessControlSortMode.LABEL -> compareBy { it.label.lowercase() }
                 AccessControlSortMode.INSTALL_TIME -> compareBy { it.installTime }
@@ -313,6 +321,11 @@ class AccessControlViewModel(
         _uiState.update { state -> state.copy(selectedFirst = selectedFirst) }
     }
 
+    fun onImportStrategyChange(strategy: AccessControlImportStrategy) {
+        settings.accessControlImportStrategy.set(strategy)
+        _uiState.update { state -> state.copy(importStrategy = strategy) }
+    }
+
     fun onShowSystemAppsChange(show: Boolean) {
         settings.accessControlShowSystemApps.set(show)
         _uiState.update { state -> state.copy(showSystemApps = show) }
@@ -334,17 +347,13 @@ class AccessControlViewModel(
 
     fun selectAll() {
         val currentFilteredPackages = filteredApps.value.mapTo(linkedSetOf()) { it.packageName }
-        _uiState.update { state ->
-            state.copy(selectedPackages = state.selectedPackages + currentFilteredPackages)
-        }
+        _uiState.update { state -> state.copy(selectedPackages = state.selectedPackages + currentFilteredPackages) }
         persistSelectionAndApply()
     }
 
     fun deselectAll() {
         val currentFilteredPackages = filteredApps.value.mapTo(linkedSetOf()) { it.packageName }
-        _uiState.update { state ->
-            state.copy(selectedPackages = state.selectedPackages - currentFilteredPackages)
-        }
+        _uiState.update { state -> state.copy(selectedPackages = state.selectedPackages - currentFilteredPackages) }
         persistSelectionAndApply()
     }
 
@@ -367,9 +376,8 @@ class AccessControlViewModel(
     fun selectNonChinaAppsInCurrentList() = applyRegionalSelectionInCurrentList(selectChina = false)
 
     /**
-     * China-app membership is computed on demand (FlClash-style deep scan behind
-     * [ChinaAppDetector]'s cache): the first run dex-scans undecided APKs and can take a while, so
-     * the list's loading state is raised for the duration.
+     * China-app membership is computed on demand (FlClash-style deep scan behind [ChinaAppDetector]'s cache): the first
+     * run dex-scans undecided APKs and can take a while, so the list's loading state is raised for the duration.
      */
     private fun applyRegionalSelectionInCurrentList(selectChina: Boolean) {
         val currentFiltered = filteredApps.value
@@ -378,12 +386,11 @@ class AccessControlViewModel(
             _uiState.update { it.copy(isLoading = true) }
             val chinaPackages = runCatching {
                 chinaAppDetector.detectChinaPackages(
-                    currentFiltered.map {
-                        ChinaAppDetector.Candidate(it.packageName, it.updateTime)
-                    }
+                    currentFiltered.map { ChinaAppDetector.Candidate(it.packageName, it.updateTime) }
                 )
             }
-                .getOrElse {
+                .getOrElse { error ->
+                    if (error is CancellationException) throw error
                     _uiState.update { state -> state.copy(isLoading = false) }
                     return@launch
                 }
@@ -395,21 +402,18 @@ class AccessControlViewModel(
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
-                    selectedPackages =
-                        state.selectedPackages.minus(currentPackages).plus(targetPackages),
+                    selectedPackages = state.selectedPackages.minus(currentPackages).plus(targetPackages),
                 )
             }
             persistSelectionAndApply()
             // KimiNoBox: report how many apps the quick select picked (string existed, unused)
             val settingsText = YumeTxt.AccessControl.Settings
-            tryEmitEffect(
-                AccessControlUiEffect.ShowMessage(
+            val message =
                     settingsText.RegionSelectResult.format(
                         if (selectChina) settingsText.ChinaApps else settingsText.OverseasApps,
                         targetPackages.size,
                     )
-                )
-            )
+            postMessage(message, AccessControlUiEffect.ShowMessage(message))
         }
     }
 
@@ -417,11 +421,16 @@ class AccessControlViewModel(
 
     fun importPackages(text: String): Int {
         val packages = text.lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-        val validPackages =
-            packages.intersect(_uiState.value.apps.mapTo(linkedSetOf()) { it.packageName })
+        val validPackages = packages.intersect(_uiState.value.apps.mapTo(linkedSetOf()) { it.packageName })
 
         _uiState.update { state ->
-            state.copy(selectedPackages = state.selectedPackages + validPackages)
+            state.copy(
+                selectedPackages =
+                    when (state.importStrategy) {
+                        AccessControlImportStrategy.MERGE -> state.selectedPackages + validPackages
+                        AccessControlImportStrategy.OVERWRITE -> validPackages
+                    }
+            )
         }
 
         persistSelectionAndApply()

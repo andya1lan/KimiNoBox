@@ -80,7 +80,7 @@ fun NodeSourceSheet(profile: Profile, navigator: Navigator, onDismiss: () -> Uni
     var failure by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<NodeSource?>(null) }
     var picking by remember { mutableStateOf(false) }
-    val boundIds = binding?.overrideIds.orEmpty()
+    val boundIds = binding?.enabledOverrideIds.orEmpty() // applied only; upstream can attach without applying
     // In chain order: the order the user sorts them in, and the order they apply in (D5)
     val bound = boundIds.mapNotNull { id -> sources.firstOrNull { it.id == id && profileId in it.boundProfileIds } }
     val checkedOverrides = boundIds.mapNotNull { id -> overrides.firstOrNull { it.id == id } }

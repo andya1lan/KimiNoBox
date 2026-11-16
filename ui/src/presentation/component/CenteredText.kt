@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.presentation.component
 
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,7 +38,6 @@ fun CenteredText(
     firstLine: String,
     secondLine: String,
     modifier: Modifier = Modifier.fillMaxSize(),
-    showEmptyResourceIllustration: Boolean = true,
 ) {
     val spacing = AppTheme.spacing
     val opacity = AppTheme.opacity
@@ -49,16 +47,12 @@ fun CenteredText(
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .widthIn(max = UiDp.dp360)
-                .fillMaxWidth(),
+            modifier = Modifier.widthIn(max = UiDp.dp360).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            if (showEmptyResourceIllustration) {
-                EmptyResourceIllustration()
-                Spacer(modifier = Modifier.height(spacing.space16))
-            }
+            EmptyResourceIllustration()
+            Spacer(modifier = Modifier.height(spacing.space16))
             Text(
                 text = firstLine,
                 modifier = Modifier.fillMaxWidth(),

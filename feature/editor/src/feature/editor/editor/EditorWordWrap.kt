@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 import com.github.yumeyucca.yumebox.data.store.AppSettingsStore
 import com.github.yumeyucca.yumebox.data.store.Preference
+import com.github.yumeyucca.yumebox.presentation.component.GlassTopAction
 import org.koin.compose.koinInject
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -59,6 +60,19 @@ fun WordWrapButton(modifier: Modifier = Modifier) {
     ) {
         Icon(WordWrapIcon, contentDescription = "自动换行", tint = if (on) colors.primary else colors.onSurface)
     }
+}
+
+/** The 「自动换行」 entry of a glass top action pill, tinted while soft wrap is on. */
+@Composable
+fun wordWrapTopAction(): GlassTopAction {
+    val setting = editorWordWrap()
+    val on by setting.state.collectAsState()
+    return GlassTopAction(
+        icon = WordWrapIcon,
+        contentDescription = "自动换行",
+        onClick = { setting.set(!on) },
+        tint = if (on) MiuixTheme.colorScheme.primary else Color.Unspecified,
+    )
 }
 
 /**

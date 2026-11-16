@@ -35,7 +35,7 @@ import com.github.yumeyucca.yumebox.common.util.toast
 import com.github.yumeyucca.yumebox.feature.editor.editor.CodeEditor
 import com.github.yumeyucca.yumebox.feature.editor.editor.WordWrapButton
 import com.github.yumeyucca.yumebox.feature.editor.editor.rememberConfiguredCodeEditorState
-import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
+import com.github.yumeyucca.yumebox.core.model.LanguageScope
 import com.github.yumeyucca.yumebox.presentation.component.SmallTopBar
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp

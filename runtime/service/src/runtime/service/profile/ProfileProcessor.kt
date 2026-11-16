@@ -37,8 +37,8 @@ import timber.log.Timber
 import java.util.*
 
 /**
- * Orchestrates profile update/delete: locks, staging commit/rollback, subscription fetch, and
- * best-effort external provider prefetch. Heavy lifting lives in focused modules under this package.
+ * Orchestrates profile update/delete: locks, staging commit/rollback, subscription fetch, and best-effort external
+ * provider prefetch. Heavy lifting lives in focused modules under this package.
  */
 object ProfileProcessor {
     private val profileLock = Mutex()
@@ -59,13 +59,11 @@ object ProfileProcessor {
         return withContext(Dispatchers.IO + NonCancellable) {
             processLock.withLock {
                 val targetDir = context.importedDir.resolve(uuid.toString())
-                val stagingDir =
-                    context.cacheDir.resolve("profile-staging").resolve(uuid.toString())
+                val stagingDir = context.cacheDir.resolve("profile-staging").resolve(uuid.toString())
                 val snapshot =
                     profileLock.withLock {
                         val imported =
-                            ImportedDao.queryByUUID(uuid)
-                                ?: throw IllegalArgumentException("profile $uuid not found")
+                            ImportedDao.queryByUUID(uuid) ?: throw IllegalArgumentException("profile $uuid not found")
 
                         stagingDir.deleteRecursively()
                         stagingDir.mkdirs()
@@ -184,8 +182,7 @@ object ProfileProcessor {
 
                             context.sendProfileChanged(
                                 snapshot.imported.uuid,
-                                affectsRuntime =
-                                    ServiceStore().activeProfile == snapshot.imported.uuid,
+                                affectsRuntime = ServiceStore().activeProfile == snapshot.imported.uuid,
                             )
                         }
                     }
@@ -194,23 +191,19 @@ object ProfileProcessor {
                 } catch (error: Exception) {
                     // fault barrier: roll back the staged update atomically, then rethrow.
                     profileLock.withLock {
-                        if (
-                            !snapshot.hasCommittedConfig &&
-                                ImportedDao.exists(snapshot.imported.uuid)
-                        ) {
+                        if (!snapshot.hasCommittedConfig && ImportedDao.exists(snapshot.imported.uuid)) {
                             ImportedDao.remove(snapshot.imported.uuid)
                             targetDir.deleteRecursively()
                             context.sendProfileChanged(
                                 snapshot.imported.uuid,
-                                affectsRuntime =
-                                    ServiceStore().activeProfile == snapshot.imported.uuid,
+                                affectsRuntime = ServiceStore().activeProfile == snapshot.imported.uuid,
                             )
                         }
                     }
                     val errorMessage = error.message ?: ""
                     if (
                         errorMessage.contains("no identities specified") ||
-                            errorMessage.contains("decrypt config error")
+                        errorMessage.contains("decrypt config error")
                     ) {
                         throw IllegalArgumentException(
                             "This config is encrypted with age. Please provide the age secret key when importing the config.",
@@ -226,7 +219,10 @@ object ProfileProcessor {
         }
     }
 
-    suspend fun delete(context: Context, uuid: UUID) {
+    suspend fun delete(
+        context: Context,
+        uuid: UUID,
+    ) {
         withContext(Dispatchers.IO + NonCancellable) {
             profileLock.withLock {
                 val affectsRuntime = ServiceStore().activeProfile == uuid

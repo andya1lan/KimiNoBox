@@ -28,13 +28,13 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.utils.io.*
+import java.io.IOException
+import java.util.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.io.IOException
-import java.util.*
 
 /**
  * REST log streams for one controller endpoint. KimiNoBox: each subscriber gets a stream of its own.
@@ -70,6 +70,11 @@ internal class CoreControllerLogStream(
             sink.open = false
             job.cancel()
         }
+    }
+
+    /** Ends the retry loop and any live subscription, so a discarded controller stops retrying. */
+    fun close() {
+        scope.cancel() // KimiNoBox: every subscriber's stream runs in this scope
     }
 
     private suspend fun streamOnce(sink: LogSink) {
@@ -109,7 +114,8 @@ internal class CoreControllerLogStream(
         when (raw.trim().lowercase()) {
             "debug" -> LogMessage.Level.Debug
             "info" -> LogMessage.Level.Info
-            "warning", "warn" -> LogMessage.Level.Warning
+            "warning",
+            "warn" -> LogMessage.Level.Warning
             "error" -> LogMessage.Level.Error
             "silent" -> LogMessage.Level.Silent
             else -> LogMessage.Level.Unknown

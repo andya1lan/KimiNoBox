@@ -22,12 +22,10 @@
 
 package com.github.yumeyucca.yumebox.core.util
 
-
 import android.content.Context
 import java.io.File
 
 const val RUNTIME_HOME_DIR_NAME = "mihomo"
-const val LEGACY_RUNTIME_HOME_DIR_NAME = "clash"
 const val PROFILE_PROVIDERS_DIR_NAME = "providers"
 const val RULE_PROVIDER_SCOPE = "rules"
 const val PROXY_PROVIDER_SCOPE = "proxies"
@@ -43,16 +41,11 @@ val Context.moeAssetsDir: File
     get() = filesDir.resolve(MOE_ASSETS_DIR_NAME)
 
 /**
- * Stable app-private slot for the locally copied home wallpaper. The directory is created on access
- * so callers can stream-copy into the returned file directly.
+ * Stable app-private slot for the locally copied home wallpaper. The directory is created on access so callers can
+ * stream-copy into the returned file directly.
  */
-fun Context.moeWallpaperFile(): File =
-    moeAssetsDir.apply { mkdirs() }.resolve(MOE_WALLPAPER_FILE_NAME)
-
-val Context.legacyRuntimeHomeDir: File
-    get() = filesDir.resolve(LEGACY_RUNTIME_HOME_DIR_NAME)
+fun Context.moeWallpaperFile(): File = moeAssetsDir.apply { mkdirs() }.resolve(MOE_WALLPAPER_FILE_NAME)
 
 fun profileProvidersRoot(profileDir: File): File = profileDir.resolve(PROFILE_PROVIDERS_DIR_NAME)
 
-fun profileProviderScopeDir(profileDir: File, scope: String): File =
-    profileProvidersRoot(profileDir).resolve(scope)
+fun profileProviderScopeDir(profileDir: File, scope: String): File = profileProvidersRoot(profileDir).resolve(scope)

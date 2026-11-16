@@ -32,6 +32,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.github.yumeyucca.yumebox.common.util.XiaomiAutoStart
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.util.AutoStartSessionGate
 import com.github.yumeyucca.yumebox.core.util.StartupTaskCoordinator
 import com.github.yumeyucca.yumebox.data.model.RunMode
@@ -52,7 +53,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
-import java.util.concurrent.atomic.AtomicBoolean
 
 class AutoRestartService : Service() {
     companion object {
@@ -71,12 +71,9 @@ class AutoRestartService : Service() {
     private val mmkvProvider by lazy { MMKVProvider() }
     private val appSettingsStorage by lazy { AppSettingsStore(mmkvProvider.getMMKV("settings")) }
     private val featureStore by lazy { FeatureStore(mmkvProvider.getMMKV("substore")) }
-    private val networkSettingsStorage by lazy {
-        NetworkSettingsStore(mmkvProvider.getMMKV("network_settings"))
-    }
+    private val networkSettingsStorage by lazy { NetworkSettingsStore(mmkvProvider.getMMKV("network_settings")) }
     private val serviceCache by lazy { mmkvProvider.getMMKV("service_cache") }
     private val profileManager by lazy { ProfileService(applicationContext) }
-    private val foregroundStarted = AtomicBoolean(false)
     private var autoStartJob: Job? = null
 
     // Duplicate triggers (boot + replaced racing) are merged into one job; the finally block
@@ -104,6 +101,9 @@ class AutoRestartService : Service() {
             try {
                 runCatching { checkAndAutoStart(reason, detail) }
                     .onFailure { error ->
+                        // Timeouts are already converted inside checkAndAutoStart, so a cancellation
+                        // reaching here is real; the finally below still clears the gate.
+                        if (error is CancellationException) throw error
                         Timber.tag(TAG).e(error, "Auto start failed: ${error.message}")
                     }
             } finally {
@@ -120,8 +120,9 @@ class AutoRestartService : Service() {
     }
 
     private fun ensureForegroundStarted() {
-        if (!foregroundStarted.compareAndSet(false, true)) return
-
+        // Idempotent on purpose: a stop-with-stale-id can leave this instance alive and out of the
+        // foreground while a one-shot guard still claims it started, and the next start would then
+        // never call startForeground — a guaranteed "did not start in time" kill.
         createNotificationChannel()
         val type =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -138,25 +139,8 @@ class AutoRestartService : Service() {
         // KimiNoBox: a runtime left running in this boot comes back even with auto start off, the
         // same way after a system kill as after an APK replace. Read before the root stop below.
         val restore = SelfHeal.isExpected(this)
-        // This line is the first evidence that the broadcast reached the app. If a boot is not
-        // logged at all, the process was never started (on MIUI/HyperOS: autostart not allowed).
-        log.i(RuntimeLog.Type.AutoStart, "check reason=$reason mode=$runMode restore=$restore$detail")
-        if (XiaomiAutoStart.isSupported()) {
-            log.i(
-                RuntimeLog.Type.AutoStart,
-                "system autostart=${XiaomiAutoStart.readState(this)}",
-            )
-        }
-
-        // An APK replacement kills app-owned services but not the detached root daemon. Tear it
-        // down before checking the restart preference so no process keeps running replaced code.
-        // verify() also reattaches a surviving root daemon before anything below reads state.
-        RuntimeCoordinator.verify()
-        if (reason == REASON_PACKAGE_REPLACED &&
-            RuntimeCoordinator.state.value.owner == RuntimeOwner.RootDaemon
-        ) {
-            RuntimeCoordinator.stop()
-        }
+        logStartAttempt(reason, runMode, log, "restore=$restore$detail")
+        dropReplacedRootDaemon(reason)
         if (!restore && !appSettingsStorage.automaticRestart.value) {
             log.skip("automatic restart is disabled")
             return
@@ -214,8 +198,34 @@ class AutoRestartService : Service() {
         }
         if (RuntimeCoordinator.state.value.phase == RuntimePhase.Running) {
             log.i(RuntimeLog.Type.AutoStart, "success: running reason=$reason mode=$runMode$detail")
-            Timber.tag(TAG)
-                .i("Auto start active: reason=$reason profile=${activeProfile.name}, mode=$runMode")
+            Timber.tag(TAG).i("Auto start active: reason=$reason profile=${activeProfile.name}, mode=$runMode")
+        }
+    }
+
+    /**
+     * Records what this start attempt is: the gate line is the first evidence the broadcast reached the app, so a boot
+     * with no line at all means the process was never started (on MIUI/HyperOS that is autostart not being allowed),
+     * and the system's own answer is logged beside it.
+     */
+    private fun logStartAttempt(reason: String, runMode: RunMode, log: RuntimeLog.Writer, extra: String) {
+        log.i(RuntimeLog.Type.AutoStart, "check reason=$reason mode=$runMode $extra") // KimiNoBox: + extra
+        if (XiaomiAutoStart.isSupported()) {
+            log.i(
+                RuntimeLog.Type.AutoStart,
+                "system autostart=${XiaomiAutoStart.readState(this)}",
+            )
+        }
+    }
+
+    /**
+     * An APK replacement kills app-owned services but not the detached root daemon. Tear it down before the restart
+     * preference is consulted, so no process keeps running replaced code; [RuntimeCoordinator.verify] first reattaches
+     * a surviving daemon so the owner check below can see it.
+     */
+    private suspend fun dropReplacedRootDaemon(reason: String) {
+        RuntimeCoordinator.verify()
+        if (reason == REASON_PACKAGE_REPLACED && RuntimeCoordinator.state.value.owner == RuntimeOwner.RootDaemon) {
+            RuntimeCoordinator.stop()
         }
     }
 
@@ -229,13 +239,10 @@ class AutoRestartService : Service() {
         val channel =
             NotificationChannel(
                     CHANNEL_ID,
-                    "Auto Restart Service",
+                    YumeTxt.AppSettings.Behavior.AutoStartTitle,
                     NotificationManager.IMPORTANCE_LOW,
                 )
-                .apply {
-                    description = "Used to restart proxy service automatically"
-                    setShowBadge(false)
-                }
+                .apply { setShowBadge(false) }
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
@@ -244,7 +251,7 @@ class AutoRestartService : Service() {
     private fun createNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("KimiNoBox") // KimiNoBox
-            .setContentText("Checking auto-start...")
+            .setContentText(YumeTxt.AppSettings.Behavior.AutoStartTitle)
             .setSmallIcon(ServiceLogoIcons.resId())
             .setOngoing(true)
             .build()

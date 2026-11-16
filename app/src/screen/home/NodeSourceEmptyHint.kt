@@ -98,9 +98,9 @@ private suspend fun emptyNodeSources(
 ): Map<String, String?> {
     val names =
         bindings.getBinding(profileUuid)
-            ?.overrideIds
+            ?.enabledOverrideIds
             .orEmpty()
-            .mapNotNull(overrides::getConfigContent)
+            .mapNotNull { overrides.getConfigContent(it) }
             .filter { NodeTemplateKind.of(it) == NodeTemplateKind.NodeSource }
             .flatMap(NodeTemplates::providerNames)
     if (names.isEmpty()) return emptyMap()

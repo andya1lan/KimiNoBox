@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.presentation.component
 
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -35,6 +34,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import com.github.panpf.sketch.AsyncImage as SketchAsyncImage
 import com.github.panpf.sketch.request.ImageRequest
 import com.github.panpf.sketch.state.IntColorDrawableStateImage
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
@@ -43,7 +43,6 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.github.panpf.sketch.AsyncImage as SketchAsyncImage
 
 @Composable
 fun <T> RoutingSwitchCard(
@@ -57,7 +56,6 @@ fun <T> RoutingSwitchCard(
     iconSize: Dp = UiDp.dp40,
     contentPadding: PaddingValues = PaddingValues(horizontal = UiDp.dp16, vertical = UiDp.dp12),
     applyHorizontalPadding: Boolean = true,
-    titleContent: @Composable (String) -> Unit = { Title(it) },
 ) {
     val spacing = AppTheme.spacing
 
@@ -73,7 +71,7 @@ fun <T> RoutingSwitchCard(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(spacing.space6),
     ) {
-        titleContent(title)
+        Title(title)
         itemChunks.forEach { chunk ->
             AppCard(applyHorizontalPadding = applyHorizontalPadding) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -109,8 +107,7 @@ private fun RoutingSwitchRow(
     val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier =
-            Modifier
-                .fillMaxWidth()
+            Modifier.fillMaxWidth()
                 .padding(contentPadding)
                 .clickable(
                     interactionSource = interactionSource,
@@ -157,8 +154,6 @@ private fun RoutingIcon(iconUrl: String?, size: Dp) {
         request = request,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = Modifier
-            .size(size)
-            .squircleClip(spacing.space14),
+        modifier = Modifier.size(size).squircleClip(spacing.space14),
     )
 }

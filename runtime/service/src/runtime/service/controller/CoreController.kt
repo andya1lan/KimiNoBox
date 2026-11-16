@@ -24,6 +24,7 @@ package com.github.yumeyucca.yumebox.runtime.service.controller
 
 import com.github.yumeyucca.yumebox.core.bridge.UnixSocketFactory
 import com.github.yumeyucca.yumebox.core.model.*
+import com.github.yumeyucca.yumebox.core.util.LenientJson
 import com.github.yumeyucca.yumebox.core.util.encodeTrafficValue
 import com.github.yumeyucca.yumebox.data.model.RemoteBackend
 import com.github.yumeyucca.yumebox.data.store.AppSettingsStore // KimiNoBox
@@ -56,55 +57,74 @@ class CoreController(
     private val local: Local? = null,
     private val backendProvider: () -> RemoteBackend? = { null },
 ) : CoreApi {
-
     /** Local controller endpoint: fixed socket path, secret read per request. */
-    class Local(val socketPath: String, val secret: () -> String)
+    class Local(
+        val socketPath: String,
+        val secret: () -> String,
+    )
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = LenientJson
 
     @Volatile private var trafficSampleCache: TimedTrafficSample? = null
 
     /** Off-critical-path refreshes (see [providerSnapshot]); never joined by a request path. */
     private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     @Volatile private var providerSnapshotCache: TimedProviderSnapshot? = null
+
     @Volatile private var providerSnapshotJob: Deferred<ProviderSnapshot>? = null
 
-    private val client: HttpClient by lazy {
-        HttpClient(OkHttp) {
-            expectSuccess = true
-            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            install(HttpTimeout) {
-                connectTimeoutMillis = CONNECT_TIMEOUT_MS
-                socketTimeoutMillis = REQUEST_TIMEOUT_MS
-                requestTimeoutMillis = REQUEST_TIMEOUT_MS
-            }
-            local?.let { target ->
-                engine {
-                    config {
-                        socketFactory(UnixSocketFactory(target.socketPath))
-                        // KimiNoBox: OkHttp matches pooled connections by host and port only, and
-                        // Ktor shares one pool across clients, so the VPN and preview cores (both
-                        // http://localhost) could answer each other's requests without this.
-                        connectionPool(ConnectionPool())
+    private val clientDelegate =
+        lazy {
+            HttpClient(OkHttp) {
+                expectSuccess = true
+                install(ContentNegotiation) { json(LenientJson) }
+                install(HttpTimeout) {
+                    connectTimeoutMillis = CONNECT_TIMEOUT_MS
+                    socketTimeoutMillis = REQUEST_TIMEOUT_MS
+                    requestTimeoutMillis = REQUEST_TIMEOUT_MS
+                }
+                local?.let { target ->
+                    engine {
+                        config {
+                            socketFactory(UnixSocketFactory(target.socketPath))
+                            // KimiNoBox: OkHttp matches pooled connections by host and port only, and
+                            // Ktor shares one pool across clients, so the VPN and preview cores (both
+                            // http://localhost) could answer each other's requests without this.
+                            connectionPool(ConnectionPool())
+                        }
                     }
                 }
             }
         }
-    }
+    private val client: HttpClient by clientDelegate
 
-    private val logStream by lazy {
-        CoreControllerLogStream(
-            client = client,
-            json = json,
-            logUrl = { buildUrl("logs", query = LOG_QUERY) },
-            applyAuth = { applyAuth() },
-            probeUrl = { buildUrl("version") }, // KimiNoBox
-        )
+    private val logStreamDelegate =
+        lazy {
+            CoreControllerLogStream(
+                client = client,
+                json = json,
+                logUrl = { buildUrl("logs", query = LOG_QUERY) },
+                applyAuth = { applyAuth() },
+                probeUrl = { buildUrl("version") }, // KimiNoBox
+            )
+        }
+    private val logStream by logStreamDelegate
+
+    /**
+     * Releases the background scopes and the HTTP engine. Only the owner of a short-lived controller (one per preview
+     * session) calls this; the shared local and remote controllers live for the whole process.
+     */
+    internal fun close() {
+        providerSnapshotJob?.cancel()
+        providerSnapshotJob = null
+        providerScope.cancel()
+        if (logStreamDelegate.isInitialized()) logStream.close()
+        if (clientDelegate.isInitialized()) client.close()
     }
 
     /** Active target secret (local token or remote backend). */
-    private fun activeSecret(): String =
-        local?.secret?.invoke() ?: (backendProvider()?.secret.orEmpty())
+    private fun activeSecret(): String = local?.secret?.invoke() ?: (backendProvider()?.secret.orEmpty())
 
     private fun ensureEndpointReady() {
         if (local != null) return
@@ -113,12 +133,11 @@ class CoreController(
         }
     }
 
-    private fun requireBackend(): RemoteBackend =
-        backendProvider() ?: error("No active remote controller backend")
+    private fun requireBackend(): RemoteBackend = backendProvider() ?: error("No active remote controller backend")
 
     /**
-     * Reachability probe for a remote backend (`GET /configs`). Always hits [backendProvider]; do
-     * not call this on a local unix-socket controller.
+     * Reachability probe for a remote backend (`GET /configs`). Always hits [backendProvider]; do not call this on a
+     * local unix-socket controller.
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun probe(): Boolean {
@@ -144,8 +163,7 @@ class CoreController(
             .apply {
                 appendPathSegments(*pathSegments)
                 query.forEach { (key, value) -> parameters.append(key, value) }
-            }
-            .buildString()
+            }.buildString()
     }
 
     private suspend fun request(
@@ -157,11 +175,15 @@ class CoreController(
         ensureEndpointReady()
         val url = buildUrl(*pathSegments, query = query)
         return when (method) {
-            HttpMethod.Get -> client.get(url) { applyAuth() }
+            HttpMethod.Get -> {
+                client.get(url) { applyAuth() }
+            }
 
-            HttpMethod.Delete -> client.delete(url) { applyAuth() }
+            HttpMethod.Delete -> {
+                client.delete(url) { applyAuth() }
+            }
 
-            HttpMethod.Put ->
+            HttpMethod.Put -> {
                 client.put(url) {
                     applyAuth()
                     if (body != null) {
@@ -169,8 +191,9 @@ class CoreController(
                         setBody(body)
                     }
                 }
+            }
 
-            HttpMethod.Patch ->
+            HttpMethod.Patch -> {
                 client.patch(url) {
                     applyAuth()
                     if (body != null) {
@@ -178,8 +201,11 @@ class CoreController(
                         setBody(body)
                     }
                 }
+            }
 
-            else -> error("Unsupported HTTP method: $method")
+            else -> {
+                error("Unsupported HTTP method: $method")
+            }
         }
     }
 
@@ -191,8 +217,7 @@ class CoreController(
     }
 
     /** Encode free-form JSON body without relying on erased Map serializers. */
-    private inline fun <reified T> jsonBody(value: T): TextContent =
-        TextContent(json.encodeToString(value), ContentType.Application.Json)
+    private inline fun <reified T> jsonBody(value: T): TextContent = TextContent(json.encodeToString(value), ContentType.Application.Json)
 
     /** `GET /configs`: answers as soon as the controller listens. */
     internal suspend fun queryTunnelState(): TunnelState {
@@ -213,41 +238,36 @@ class CoreController(
     /** Reuse one stream sample for the adjacent now/total reads performed by the UI. */
     private suspend fun readTrafficSample(): RawTraffic? {
         val now = System.nanoTime()
-        trafficSampleCache?.takeIf { now - it.capturedAtNanos <= TRAFFIC_SAMPLE_CACHE_NS }?.let {
-            return it.sample
-        }
+        trafficSampleCache
+            ?.takeIf { now - it.capturedAtNanos <= TRAFFIC_SAMPLE_CACHE_NS }
+            ?.let {
+                return it.sample
+            }
         return runCatching {
-                client
-                    .prepareGet(buildUrl("traffic")) { applyAuth() }
-                    .execute { response ->
-                        val line = response.bodyAsChannel().readLine()
-                        line?.let { json.decodeFromString<RawTraffic>(it) }
-                    }
-            }
+            client
+                .prepareGet(buildUrl("traffic")) { applyAuth() }
+                .execute { response ->
+                    val line = response.bodyAsChannel().readLine()
+                    line?.let { json.decodeFromString<RawTraffic>(it) }
+                }
+        }.onFailure { error -> if (error is CancellationException) throw error }
             .getOrNull()
-            ?.also { sample ->
-                trafficSampleCache = TimedTrafficSample(sample, System.nanoTime())
-            }
+            ?.also { sample -> trafficSampleCache = TimedTrafficSample(sample, System.nanoTime()) }
     }
 
     override suspend fun queryConnections(): ConnectionSnapshot =
         client
-            .prepareGet(buildUrl("connections", query = CONNECTIONS_QUERY)) {
-                applyAuth()
-            }
+            .prepareGet(buildUrl("connections", query = CONNECTIONS_QUERY)) { applyAuth() }
             .execute { response ->
                 val line =
-                    response.bodyAsChannel().readLine()
-                        ?: error("connections stream ended before the first snapshot")
+                    response.bodyAsChannel().readLine() ?: error("connections stream ended before the first snapshot")
                 json.decodeFromString<ConnectionSnapshot>(line)
             }
 
-    override suspend fun queryAllProxyGroups(excludeNotSelectable: Boolean): List<ProxyGroup> =
+    override suspend fun queryAllProxyGroups(): List<ProxyGroup> =
         withGroupQueryTimeout {
             val nodes = fetchProxies()
-            orderGroups(fetchGroups(), nodes)
-                .filter { !excludeNotSelectable || it.type in Proxy.Type.manuallySelectable }
-                .map { buildGroup(it, nodes, ProxySort.Default) }
+            orderGroups(fetchGroups(), nodes).map { buildGroup(it, nodes, ProxySort.Default) }
         }
 
     private suspend fun <T> withGroupQueryTimeout(block: suspend () -> T): T =
@@ -258,13 +278,19 @@ class CoreController(
         }
 
     /** Prefer GLOBAL.all order, then name. */
-    private fun orderGroups(groups: List<RawProxy>, nodes: Map<String, RawProxy>): List<RawProxy> {
+    private fun orderGroups(
+        groups: List<RawProxy>,
+        nodes: Map<String, RawProxy>,
+    ): List<RawProxy> {
         val canonical = nodes["GLOBAL"]?.all ?: emptyList()
         val indexOf = canonical.withIndex().associate { (i, name) -> name to i }
         return groups.sortedWith(compareBy({ indexOf[it.name] ?: Int.MAX_VALUE }, { it.name }))
     }
 
-    override suspend fun queryProxyGroup(name: String, proxySort: ProxySort): ProxyGroup {
+    override suspend fun queryProxyGroup(
+        name: String,
+        proxySort: ProxySort,
+    ): ProxyGroup {
         val nodes = fetchProxies()
         val group =
             nodes[name]
@@ -280,32 +306,31 @@ class CoreController(
     /**
      * Every node the UI can render, keyed by name.
      *
-     * `/proxies` (`tunnel.Proxies()` in the core) is the canonical, immediately available snapshot,
-     * but it holds only config-declared outbounds and groups: members a group pulls in through
-     * `proxy-providers` are absent, so [buildGroup] used to fall back to a placeholder and render
-     * every provider-backed node as type Unknown with no latency. Providers therefore form the base
-     * layer and `/proxies` is laid on top, so a config-declared proxy of the same name still wins —
-     * the same precedence the core itself resolves.
+     * `/proxies` (`tunnel.Proxies()` in the core) is the canonical, immediately available snapshot, but it holds only
+     * config-declared outbounds and groups: members a group pulls in through `proxy-providers` are absent, so
+     * [buildGroup] used to fall back to a placeholder and render every provider-backed node as type Unknown with no
+     * latency. Providers therefore form the base layer and `/proxies` is laid on top, so a config-declared proxy of the
+     * same name still wins — the same precedence the core itself resolves.
      *
-     * The two fetches run concurrently and the provider half is bounded (see [providerSnapshot]),
-     * so this never reintroduces the startup regression that made group queries wait on provider
-     * initialization.
+     * The two fetches run concurrently and the provider half is bounded (see [providerSnapshot]), so this never
+     * reintroduces the startup regression that made group queries wait on provider initialization.
      */
-    private suspend fun fetchProxies(): Map<String, RawProxy> = coroutineScope {
-        val direct = async {
-            val raw = request(HttpMethod.Get, "proxies").bodyAsText()
-            json.decodeFromString<RawProxiesResponse>(raw).proxies
+    private suspend fun fetchProxies(): Map<String, RawProxy> =
+        coroutineScope {
+            val direct =
+                async {
+                    val raw = request(HttpMethod.Get, "proxies").bodyAsText()
+                    json.decodeFromString<RawProxiesResponse>(raw).proxies
+                }
+            providerSnapshot().nodes + direct.await()
         }
-        providerSnapshot().nodes + direct.await()
-    }
 
     /**
      * Best-effort snapshot of the nodes served by proxy providers, keyed by node name.
      *
-     * Group queries use [PROVIDER_SNAPSHOT_WAIT_MS] so a slow provider does not stall the critical
-     * path, while an explicit node test can request a longer wait before reporting an unknown
-     * provider node as timed out. The in-flight fetch keeps running and fills the cache for the
-     * next call.
+     * Group queries use [PROVIDER_SNAPSHOT_WAIT_MS] so a slow provider does not stall the critical path, while an
+     * explicit node test can request a longer wait before reporting an unknown provider node as timed out. The
+     * in-flight fetch keeps running and fills the cache for the next call.
      */
     private suspend fun providerSnapshot(
         waitMillis: Long = PROVIDER_SNAPSHOT_WAIT_MS,
@@ -326,23 +351,20 @@ class CoreController(
 
     @Synchronized
     private fun refreshProviderSnapshot(): Deferred<ProviderSnapshot> {
-        providerSnapshotJob?.takeIf { it.isActive }?.let {
-            return it
-        }
+        providerSnapshotJob
+            ?.takeIf { it.isActive }
+            ?.let {
+                return it
+            }
         return providerScope
             .async {
                 runCatching { fetchProviderSnapshot() }
-                    .onSuccess {
-                        providerSnapshotCache = TimedProviderSnapshot(it, System.nanoTime())
-                    }
+                    .onSuccess { providerSnapshotCache = TimedProviderSnapshot(it, System.nanoTime()) }
                     .onFailure { error ->
+                        if (error is CancellationException) throw error
                         Timber.d(error, "provider node snapshot unavailable")
-                    }
-                    .getOrElse {
-                        providerSnapshotCache?.snapshot ?: ProviderSnapshot.Empty
-                    }
-            }
-            .also { providerSnapshotJob = it }
+                    }.getOrElse { providerSnapshotCache?.snapshot ?: ProviderSnapshot.Empty }
+            }.also { providerSnapshotJob = it }
     }
 
     private suspend fun fetchProviderSnapshot(): ProviderSnapshot {
@@ -375,10 +397,15 @@ class CoreController(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    override suspend fun patchSelector(group: String, name: String): Boolean =
+    override suspend fun patchSelector(
+        group: String,
+        name: String,
+    ): Boolean =
         try {
             request(HttpMethod.Put, "proxies", group, body = SelectBody(name)).status.isSuccess()
-        } catch (_: Throwable) { // fault barrier: remote REST call must degrade to "not selected"
+        } catch (error: Throwable) {
+            // fault barrier: remote REST call must degrade to "not selected"
+            if (error is CancellationException) throw error
             false
         }
 
@@ -386,13 +413,15 @@ class CoreController(
     override suspend fun closeConnection(id: String): Boolean =
         try {
             request(HttpMethod.Delete, "connections", id).status.isSuccess()
-        } catch (_: Throwable) { // fault barrier: remote REST call must degrade to "not closed"
+        } catch (error: Throwable) {
+            // fault barrier: remote REST call must degrade to "not closed"
+            if (error is CancellationException) throw error
             false
         }
 
     /**
-     * Starts a provider snapshot refresh without blocking the test. Probe requests share the
-     * in-flight refresh, so a cold cache still resolves ownership once instead of per proxy.
+     * Starts a provider snapshot refresh without blocking the test. Probe requests share the in-flight refresh, so a
+     * cold cache still resolves ownership once instead of per proxy.
      */
     override suspend fun warmUpProviderSnapshot() {
         val snapshot = providerSnapshotCache
@@ -410,12 +439,12 @@ class CoreController(
                 group,
                 "delay",
                 query = delayQuery,
-            )
-                .bodyAsText()
+            ).bodyAsText()
                 .let { raw -> json.decodeFromString<Map<String, Int>>(raw) }
-        }
-            .onFailure { error -> Timber.d(error, "Group delay test failed: %s", group) }
-            .getOrDefault(emptyMap())
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            Timber.d(error, "Group delay test failed: %s", group)
+        }.getOrDefault(emptyMap())
 
     override suspend fun healthCheckProxy(proxyName: String): Int {
         readDelay("proxies", proxyName, "delay")?.let {
@@ -428,8 +457,7 @@ class CoreController(
                 ?: providerSnapshot(
                     waitMillis = PROVIDER_DELAY_OWNER_WAIT_MS,
                     forceRefresh = true,
-                )
-                    .owners[proxyName]
+                ).owners[proxyName]
                 ?: return -1
         return readDelay("providers", "proxies", owner, proxyName, "healthcheck") ?: -1
     }
@@ -444,17 +472,19 @@ class CoreController(
             } else {
                 null
             }
-        } catch (_: Throwable) { // fault barrier: remote REST delay test degrades to "no result"
+        } catch (error: Throwable) {
+            // fault barrier: remote REST delay test degrades to "no result"
+            if (error is CancellationException) throw error
             null
         }
 
     /** Proxy + rule providers; built-in Compatible entries are omitted. */
     override suspend fun queryProviders(): ProviderList {
-        val proxies = runCatching {
-            fetchProviders(category = "proxies", type = Provider.Type.Proxy)
-        }
-        val rules = runCatching {
-            fetchProviders(category = "rules", type = Provider.Type.Rule)
+        val proxies = runCatching { fetchProviders(category = "proxies", type = Provider.Type.Proxy) }
+        val rules = runCatching { fetchProviders(category = "rules", type = Provider.Type.Rule) }
+        // A cancelled probe is not a provider outage: never degrade cancellation to an empty list.
+        (proxies.exceptionOrNull() ?: rules.exceptionOrNull())?.let { error ->
+            if (error is CancellationException) throw error
         }
         if (proxies.isFailure && rules.isFailure) {
             throw requireNotNull(proxies.exceptionOrNull()).also { proxyError ->
@@ -526,10 +556,17 @@ class CoreController(
 
     private fun parseUpdatedAtMillis(raw: String?): Long {
         if (raw.isNullOrBlank()) return 0L
-        return runCatching { Instant.parse(raw).toEpochMilli() }.getOrDefault(0L)
+        // A core build that reports a malformed timestamp must not be mistaken for "updated in 1970";
+        // keep the 0 sentinel the UI already renders, but leave a trace of what the core actually said.
+        return runCatching { Instant.parse(raw).toEpochMilli() }
+            .onFailure { Timber.w(it, "Unparsable provider updatedAt: %s", raw) }
+            .getOrDefault(0L)
     }
 
-    override suspend fun updateProvider(type: Provider.Type, name: String) {
+    override suspend fun updateProvider(
+        type: Provider.Type,
+        name: String,
+    ) {
         val category = if (type == Provider.Type.Proxy) "proxies" else "rules"
         // KimiNoBox: the core puts the reason of a failed update (download error, HTTP status)
         // into the body; the HTTP exception message would bury it behind the request line.
@@ -623,15 +660,22 @@ class CoreController(
             }
         val sorted =
             when (sort) {
-                ProxySort.Default -> members
-                ProxySort.Title -> members.sortedBy { it.name }
-                ProxySort.Delay ->
+                ProxySort.Default -> {
+                    members
+                }
+
+                ProxySort.Title -> {
+                    members.sortedBy { it.name }
+                }
+
+                ProxySort.Delay -> {
                     members.sortedWith(
                         compareBy(
                             { if (it.delay > 0) 0 else 1 },
                             { if (it.delay > 0) it.delay else Int.MAX_VALUE },
-                        )
+                        ),
                     )
+                }
             }
         return ProxyGroup(
             name = group.name,

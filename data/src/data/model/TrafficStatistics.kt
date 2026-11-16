@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.data.model
 
-
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -91,21 +90,7 @@ object TrafficStatisticsBuckets {
 }
 
 @Serializable
-data class AppRouteTrafficUsage(
-    val appKey: String,
-    val routeKey: String,
-    val routeLabel: String,
-    val totalUpload: Long = 0L,
-    val totalDownload: Long = 0L,
-    val lastActiveAt: Long = 0L,
-) {
-    val totalBytes: Long
-        get() = totalUpload + totalDownload
-}
-
-@Serializable
 data class ConnectionTrafficBaseline(
-    val id: String,
     val upload: Long,
     val download: Long,
     val appKey: String,

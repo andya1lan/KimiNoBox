@@ -93,8 +93,9 @@ internal fun rememberMoeDuoBackdropColors(
 
 /**
  * Whether the strip needs dark ink over [wallpaper]: the color goes through the strip's own tint
- * (YumeHaze.glassColorEffects, then about the outer two thirds of MoeSidebarDecoration's
- * gradient) before its luminance is checked.
+ * (MoeSidebarDecoration's glass tint, a slight dim, then about the outer two thirds of its
+ * gradient) before its luminance is checked. Calibrated on the haze glass; the miuix glass that
+ * replaced it uses the same tint.
  */
 internal fun moeDuoNeedsDarkInk(wallpaper: Color, surface: Color, isDarkSurface: Boolean): Boolean {
     val tinted =

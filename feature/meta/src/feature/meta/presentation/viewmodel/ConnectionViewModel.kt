@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.feature.meta.presentation.viewmodel
 
-
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,7 +30,10 @@ import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
 import com.github.yumeyucca.yumebox.core.model.ConnectionSnapshot
 import com.github.yumeyucca.yumebox.core.util.PollingTimerSpecs
 import com.github.yumeyucca.yumebox.core.util.PollingTimers
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.displayTarget
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.stringOrEmpty
 import com.github.yumeyucca.yumebox.runtime.client.access.RuntimeAccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -54,38 +56,26 @@ enum class ConnectionTab {
 data class ConnectionState(
     val snapshot: ConnectionSnapshot? = null,
     val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
     val searchQuery: String = "",
     val sortBy: ConnectionSort = ConnectionSort.Time,
     val selectedTab: ConnectionTab = ConnectionTab.ACTIVE,
     val error: String? = null,
-) {
-    val totalConnections: Int
-        get() = snapshot?.connections?.size ?: 0
-}
+)
 
 class ConnectionViewModel(private val appContext: Context) : ViewModel() {
     private val _state = MutableStateFlow(ConnectionState())
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
-
-    val filteredConnections: StateFlow<List<ConnectionInfo>> =
-        state
-            .map(::buildFilteredConnections)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList(),
-            )
 
     data class ConnectionScreenState(
         val state: ConnectionState = ConnectionState(),
         val filteredConnections: List<ConnectionInfo> = emptyList(),
     )
 
+    /** Derived from [state] alone, so the snapshot and its projection can never disagree. */
     val screenState: StateFlow<ConnectionScreenState> =
-        combine(state, filteredConnections) { s, filtered ->
-            ConnectionScreenState(state = s, filteredConnections = filtered)
-        }
+        state
+            .map { current -> ConnectionScreenState(current, buildFilteredConnections(current)) }
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -93,30 +83,29 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
             )
 
     private var pollingJob: Job? = null
-    private var _isPolling = false
 
-    @Suppress("TooGenericExceptionCaught")
     fun startPolling() {
-        if (_isPolling) return
-        _isPolling = true
+        if (pollingJob?.isActive == true) return
 
         pollingJob = viewModelScope.launch {
-            refreshConnections(showRefreshing = false)
-            PollingTimers.foregroundTicks(PollingTimerSpecs.ConnectionsPolling).collect { // KimiNoBox
-                try {
-                    refreshConnections(showRefreshing = true)
-                } catch (
-                    error: Exception
-                ) { // fault barrier: keep the polling loop alive on any failure
-                    Timber.w(error, "Failed to poll connections")
-                    _state.update { it.copy(error = error.message, isRefreshing = false) }
-                }
-            }
+            pollOnce()
+            PollingTimers.foregroundTicks(PollingTimerSpecs.ConnectionsPolling) /* KimiNoBox */.collect { pollOnce() }
+        }
+    }
+
+    /** One poll tick; a failure is reported through the state instead of killing the loop. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun pollOnce() {
+        try {
+            refreshConnections()
+        } catch (error: Exception) { // fault barrier: keep the polling loop alive on any failure
+            if (error is CancellationException) throw error
+            Timber.w(error, "Failed to poll connections")
+            _state.update { it.copy(error = error.message) }
         }
     }
 
     fun stopPolling() {
-        _isPolling = false
         pollingJob?.cancel()
         pollingJob = null
     }
@@ -139,23 +128,21 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
 
     suspend fun closeConnection(id: String): Boolean =
         withContext(Dispatchers.IO) {
-            runCatching {
-                RuntimeAccess.connect(appContext)
-                RuntimeAccess.core().closeConnection(id)
+                runCatching {
+                        RuntimeAccess.connect(appContext)
+                        RuntimeAccess.core().closeConnection(id)
+                    }
+                    .onFailure { error ->
+                        if (error is CancellationException) throw error
+                        Timber.w(error, "Failed to close connection: %s", id)
+                        _state.update { it.copy(error = error.message) }
+                    }
+                    .getOrDefault(false)
             }
-                .onFailure { error ->
-                    Timber.w(error, "Failed to close connection: %s", id)
-                    _state.update { it.copy(error = error.message) }
-                }
-                .getOrDefault(false)
-        }
-            .also { refreshConnections(showRefreshing = true) }
+            .also { refreshConnections() }
 
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun refreshConnections(showRefreshing: Boolean) {
-        if (showRefreshing) {
-            _state.update { current -> current.copy(isRefreshing = true) }
-        }
+    private suspend fun refreshConnections() {
         withContext(Dispatchers.IO) {
             try {
                 RuntimeAccess.connect(appContext)
@@ -166,16 +153,12 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
                         snapshot = snapshot,
                         error = null,
                         isLoading = false,
-                        isRefreshing = false,
                     )
                 }
-            } catch (
-                error: Exception
-            ) { // fault barrier: service IPC failure becomes UI error state
+            } catch (error: Exception) { // fault barrier: service IPC failure becomes UI error state
+                if (error is CancellationException) throw error
                 Timber.w(error, "Failed to query connections")
-                _state.update {
-                    it.copy(error = error.message, isLoading = false, isRefreshing = false)
-                }
+                _state.update { it.copy(error = error.message, isLoading = false) }
             }
         }
     }
@@ -193,15 +176,12 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
             } else {
                 val query = currentState.searchQuery.lowercase()
                 connections.filter { conn ->
-                    val host = connectionDisplayTarget(conn).lowercase()
-                    val process = conn.metadata.process.lowercase()
+                    val host = conn.displayTarget().lowercase()
+                    val process = conn.metadata.stringOrEmpty("process").lowercase()
                     val chains = conn.chains.joinToString(" ").lowercase()
                     val rule = conn.rule.lowercase()
 
-                    host.contains(query) ||
-                            process.contains(query) ||
-                            chains.contains(query) ||
-                            rule.contains(query)
+                    host.contains(query) || process.contains(query) || chains.contains(query) || rule.contains(query)
                 }
             }
 
@@ -211,7 +191,7 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
                     ConnectionSort.Time -> filtered.sortedByDescending { it.start }
                     ConnectionSort.Upload -> filtered.sortedByDescending { it.upload }
                     ConnectionSort.Download -> filtered.sortedByDescending { it.download }
-                    ConnectionSort.Host -> filtered.sortedBy { connectionDisplayTarget(it) }
+                    ConnectionSort.Host -> filtered.sortedBy { it.displayTarget() }
                 }
             } else {
                 filtered
@@ -221,24 +201,5 @@ class ConnectionViewModel(private val appContext: Context) : ViewModel() {
 
     override fun onCleared() {
         stopPolling()
-    }
-}
-
-private fun connectionDisplayTarget(connection: ConnectionInfo): String {
-    val metadata = connection.metadata
-    val host = metadata.host
-    val destinationIp = metadata.destinationIP
-    val destinationPort = metadata.destinationPort
-    val sourceIp = metadata.sourceIP
-    val sourcePort = metadata.sourcePort
-    return when {
-        host.isNotBlank() && destinationPort.isNotBlank() -> "$host:$destinationPort"
-        host.isNotBlank() -> host
-        destinationIp.isNotBlank() && destinationPort.isNotBlank() ->
-            "$destinationIp:$destinationPort"
-
-        destinationIp.isNotBlank() -> destinationIp
-        sourceIp.isNotBlank() && sourcePort.isNotBlank() -> "$sourceIp:$sourcePort"
-        else -> sourceIp
     }
 }

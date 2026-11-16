@@ -21,16 +21,23 @@
 package com.github.yumeyucca.yumebox.runtime.service.notification
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.SystemClock
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.util.PollingTimerSpecs
 import com.github.yumeyucca.yumebox.core.util.PollingTimers
+import com.github.yumeyucca.yumebox.data.model.NotificationDisplaySettings
 import com.github.yumeyucca.yumebox.data.store.AppSettingsStore
 import com.github.yumeyucca.yumebox.data.store.RemoteControllerStore
 import com.github.yumeyucca.yumebox.domain.model.resolvePrimaryNode
@@ -46,6 +53,7 @@ import com.github.yumeyucca.yumebox.runtime.service.profile.ImportedDao
 import com.github.yumeyucca.yumebox.runtime.service.shizuku.ShizukuManager
 import com.github.yumeyucca.yumebox.runtime.service.util.ServiceLogoIcons
 import com.tencent.mmkv.MMKV
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,7 +61,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 
 class ServiceNotificationManager(
     private val service: Service,
@@ -81,6 +88,7 @@ class ServiceNotificationManager(
     private var islandShown = false
     private var bypassAcquired = false
     private var lastFrame: NoticeFrame? = null
+    private val notificationTime = System.currentTimeMillis()
 
     fun createChannel() {
         legacyChannelIds.forEach(notificationManager::deleteNotificationChannel)
@@ -99,18 +107,22 @@ class ServiceNotificationManager(
     // stay free of MMKV/DAO reads. The enriched content follows via the updater.
     fun createInitialNotification(): Notification =
         buildNotification(
-            NotificationPresentationFactory.createStatus(
-                profileName = service.applicationInfo.loadLabel(service.packageManager).toString(),
-                status = YumeTxt.Service.Notification.Running,
-            )
+            presentation =
+                NotificationPresentationFactory.createStatus(
+                    profileName = service.applicationInfo.loadLabel(service.packageManager).toString(),
+                    status = YumeTxt.Service.Notification.Running,
+                ),
+            // Do not promote the startup placeholder before real traffic values are available.
+            promoteLiveUpdate = false,
         )
 
     /**
      * KimiNoBox: the plain notification only names the profile, so it is re-posted on runtime
      * transitions (start, profile switch) and never polls. The old 1 s ticker cost a profile read
      * and core IPC every second, and re-posted every ~2 s because the island-only speed field
-     * kept changing. Only the HyperOS Super Island still ticks, since it shows the live speed.
-     * The mode is chosen once per service start.
+     * kept changing. Only the HyperOS Super Island still ticks, since it shows the live speed, so
+     * the notification display lines apply to the island; the plain one keeps the Live Updates
+     * switch. The mode is chosen once per service start.
      */
     fun startUpdates(scope: CoroutineScope): Job =
         scope.launch(Dispatchers.IO) {
@@ -129,8 +141,8 @@ class ServiceNotificationManager(
         }
 
     /**
-     * Stop updating and clear the notification. After this the traffic updater never notifies
-     * again. The caller cancels the traffic job; that job releases the XMSF bypass.
+     * Stop updating and clear the notification. After this the traffic updater never notifies again. The caller cancels
+     * the traffic job; that job releases the XMSF bypass.
      */
     fun release() {
         released = true
@@ -140,7 +152,10 @@ class ServiceNotificationManager(
     }
 
     private sealed interface NoticeFrame {
-        data class Plain(val presentation: NotificationPresentation) : NoticeFrame
+        data class Plain(
+            val presentation: NotificationPresentation,
+            val promoteLiveUpdate: Boolean,
+        ) : NoticeFrame
 
         data class Island(val running: NotificationPresentation.Running) : NoticeFrame
     }
@@ -148,19 +163,25 @@ class ServiceNotificationManager(
     private suspend fun loadFrame(): NoticeFrame {
         // Reading the profile deserializes the whole stored list, so resolve it only once.
         val profile = resolveProfile()
-        val profileName =
-            profile?.name?.takeIf { it.isNotBlank() }
-                ?: YumeTxt.Service.Notification.UnknownProfile
+        val profileName = profile?.name?.takeIf { it.isNotBlank() } ?: YumeTxt.Service.Notification.UnknownProfile
         if (!shouldShowTrafficNotification()) {
             return NoticeFrame.Plain(
                 NotificationPresentationFactory.createStatus(
                     profileName = profileName,
                     status = YumeTxt.Service.Notification.Running,
-                )
+                ),
+                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
             )
         }
         val running = loadRunning(profile, profileName)
-        return if (isIslandEnabled()) NoticeFrame.Island(running) else NoticeFrame.Plain(running)
+        return if (isIslandEnabled()) {
+            NoticeFrame.Island(running)
+        } else {
+            NoticeFrame.Plain(
+                running,
+                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
+            )
+        }
     }
 
     private suspend fun loadRunning(
@@ -168,12 +189,26 @@ class ServiceNotificationManager(
         profileName: String,
     ): NotificationPresentation.Running {
         val core = CoreProcess.controller(service)
-        val now = runCatching { core.queryTrafficNow() }.getOrDefault(0L)
+        val now = runCatching {
+            core.queryTrafficNow()
+        }.onFailure { error -> if (error is CancellationException) throw error }.getOrDefault(0L)
+        val total = runCatching {
+            core.queryTrafficTotal()
+        }.onFailure { error -> if (error is CancellationException) throw error }.getOrDefault(0L)
+        val displaySettings =
+            NotificationDisplaySettings(
+                firstLine = appSettings.notificationFirstLine.value,
+                secondLine = appSettings.notificationSecondLine.value,
+                firstLineText = appSettings.notificationFirstLineText.value,
+                secondLineText = appSettings.notificationSecondLineText.value,
+            )
         return NotificationPresentationFactory.createRunning(
             profileName = profileName,
             profile = profile,
             currentNode = resolveCurrentNode(core),
             trafficNow = now,
+            trafficTotal = total,
+            displaySettings = displaySettings,
         )
     }
 
@@ -188,7 +223,8 @@ class ServiceNotificationManager(
                 NotificationPresentationFactory.createStatus(
                     profileName = profileName,
                     status = YumeTxt.Service.Notification.Running,
-                )
+                ),
+                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
             )
         )
     }
@@ -224,7 +260,7 @@ class ServiceNotificationManager(
     private suspend fun postPlain(frame: NoticeFrame.Plain) {
         if (releaseBypass()) islandShown = false
         if (frame == lastFrame) return
-        deliver(buildNotification(frame.presentation))
+        deliver(buildNotification(frame.presentation, frame.promoteLiveUpdate))
         lastFrame = frame
     }
 
@@ -246,7 +282,8 @@ class ServiceNotificationManager(
         running: NotificationPresentation.Running,
         promote: Boolean,
     ): Notification {
-        val notification = buildNotification(running)
+        // The island and native live-update card would duplicate each other on HyperOS.
+        val notification = buildNotification(running, promoteLiveUpdate = false)
         HyperOsIsland.applyExtras(service, notification, running, smallIconRes(), promote)
         return notification
     }
@@ -259,7 +296,10 @@ class ServiceNotificationManager(
         }
     }
 
-    private fun buildNotification(presentation: NotificationPresentation): Notification {
+    private fun buildNotification(
+        presentation: NotificationPresentation,
+        promoteLiveUpdate: Boolean,
+    ): Notification {
         val contentIntent =
             PendingIntent.getActivity(
                 service,
@@ -277,28 +317,57 @@ class ServiceNotificationManager(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        return NotificationCompat.Builder(service, config.channelId)
-            .setContentTitle(presentation.title)
-            .setContentText(presentation.content)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(presentation.expandedText))
-            .setSmallIcon(smallIconRes())
-            .setColor(service.getColor(R.color.color_yumebox))
-            .setContentIntent(contentIntent)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        val builder =
+            NotificationCompat.Builder(service, config.channelId)
+                .setContentTitle(presentation.title)
+                .setContentText(presentation.content)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(presentation.expandedText))
+                .setSmallIcon(smallIconRes())
+                // Keep the expanded header's small icon white.
+                .setColor(Color.WHITE)
+                .setContentIntent(contentIntent)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setWhen(notificationTime)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        val liveUpdate =
+            promoteLiveUpdate &&
+                NativeLiveNotification.apply(
+                    builder = builder,
+                    manager = service.getSystemService(NotificationManager::class.java),
+                    criticalText = presentation.criticalText,
+                )
+        if (liveUpdate) {
+            // Text-only action for the live-update card.
+            builder.addAction(
+                0,
+                whiteActionLabel(YumeTxt.Service.Notification.SelectNode),
+                contentIntent,
+            )
+        }
+        // Promoted cards hide the timestamp; standard notifications keep it.
+        builder.setShowWhen(!liveUpdate)
+        return builder.build()
     }
 
     // startForeground() must never trip before the first frame, so a preference read failure falls
     // back to the default logo.
-    private fun smallIconRes(): Int =
-        runCatching { ServiceLogoIcons.resId() }.getOrDefault(R.drawable.ic_logo_service)
+    private fun smallIconRes(): Int = runCatching { ServiceLogoIcons.resId() }.getOrDefault(R.drawable.ic_logo_service)
 
-    private fun resolveProfile(): Imported? =
-        serviceStore.activeProfile?.let { ImportedDao.queryByUUID(it) }
+    private fun whiteActionLabel(text: String): CharSequence =
+        SpannableString(text).apply {
+            setSpan(
+                ForegroundColorSpan(Color.WHITE),
+                0,
+                length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+
+    private fun resolveProfile(): Imported? = serviceStore.activeProfile?.let { ImportedDao.queryByUUID(it) }
 
     private suspend fun resolveCurrentNode(core: CoreApi): String? {
         val now = SystemClock.elapsedRealtime()
@@ -306,10 +375,10 @@ class ServiceNotificationManager(
             return currentNode
         }
         currentNodeUpdatedAt = now
-        runCatching { core.queryAllProxyGroups(false) }
-            .onSuccess { groups ->
-                currentNode = groups.map { it.toInfo() }.resolvePrimaryNode()?.name
-            }
+        // A failed probe keeps the previous node name; cancellation still propagates.
+        runCatching { core.queryAllProxyGroups() }
+            .onFailure { error -> if (error is CancellationException) throw error }
+            .onSuccess { groups -> currentNode = groups.map { it.toInfo() }.resolvePrimaryNode()?.name }
         return currentNode
     }
 
@@ -321,14 +390,12 @@ class ServiceNotificationManager(
         }
 
     private fun isIslandEnabled(): Boolean =
-        !RemoteControllerStore.isActive() &&
-            appSettings.superIslandEnabled.value &&
-            HyperOsIsland.isSupported()
+        !RemoteControllerStore.isActive() && appSettings.superIslandEnabled.value && HyperOsIsland.isSupported()
 
     companion object {
         /**
-         * Kept past the first island `startForeground()`. HyperOS decides whether to keep the island
-         * while that notification is delivered, and the XMSF bypass is already held.
+         * Kept past the first island `startForeground()`. HyperOS decides whether to keep the island while that
+         * notification is delivered, and the XMSF bypass is already held.
          */
         private const val ISLAND_SETTLE_DELAY_MS = 100L
 

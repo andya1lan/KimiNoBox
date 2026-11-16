@@ -59,9 +59,9 @@ internal fun DelayTestUrlPreferenceItem() {
         title = TITLE,
         summary = url,
         currentValue = DelayTestUrl.presetOf(url)?.url,
-        items = DelayTestUrl.presets.map { it.label } + CUSTOM,
         // null is 「自定义」
         values = DelayTestUrl.presets.map { it.url } + null,
+        label = { value -> DelayTestUrl.presets.firstOrNull { it.url == value }?.label ?: CUSTOM },
         onValueChange = { picked -> if (picked == null) editing = true else setting.set(picked) },
     )
 

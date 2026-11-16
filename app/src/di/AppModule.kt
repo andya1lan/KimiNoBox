@@ -20,6 +20,7 @@
 
 package com.github.yumeyucca.yumebox.di
 
+import com.github.yumeyucca.yumebox.feature.override.di.featureOverrideModules
 import com.github.yumeyucca.yumebox.screen.home.HomeViewModel
 import com.github.yumeyucca.yumebox.nodesource.nodeSourceModule // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.log.LogViewModel
@@ -30,6 +31,7 @@ import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.GeoXDownloadClient // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.settings.NetworkSettingsViewModel
 import com.github.yumeyucca.yumebox.screen.settings.WifiAutomationViewModel
+import com.github.yumeyucca.yumebox.update.AppUpdateViewModel
 import org.koin.android.ext.koin.androidApplication
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
@@ -41,7 +43,8 @@ val appIntegrationModule = module {
 
 val appViewModelModule = module {
     viewModel { AppSettingsViewModel(androidApplication(), get(), get(), get()) }
-    viewModel { HomeViewModel(androidApplication(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { AppUpdateViewModel(androidApplication(), get(), get()) }
     viewModel { ProfilesViewModel(androidApplication(), get(), get()) }
     viewModel { NetworkSettingsViewModel(androidApplication(), get(), get()) }
     viewModel { AccessControlViewModel(androidApplication(), get(), get()) }
@@ -51,9 +54,10 @@ val appViewModelModule = module {
 }
 
 val appModule: List<Module> =
-    coreDiModules +
-            listOf(appIntegrationModule, appViewModelModule) +
-            listOf(nodeSourceModule) + // KimiNoBox
-            featureProxyModules +
-            featureOverrideModules +
-            featureMetaModules
+    listOf(
+        appFoundationModule,
+        appDataRuntimeModule,
+        appIntegrationModule,
+        appViewModelModule,
+        nodeSourceModule, // KimiNoBox
+    ) + featureProxyModules + featureOverrideModules + featureMetaModules

@@ -22,167 +22,168 @@
 
 package com.github.yumeyucca.yumebox.screen.settings
 
-
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import android.content.Context
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.state.ToggleableState
-import com.github.yumeyucca.yumebox.core.model.GeoFileType
+import com.github.yumeyucca.yumebox.common.util.formatDateTime
+import com.github.yumeyucca.yumebox.common.util.toast
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.model.GeoXItem
 import com.github.yumeyucca.yumebox.core.model.geoXItems
+import com.github.yumeyucca.yumebox.core.util.runtimeHomeDir
+import com.github.yumeyucca.yumebox.di.APPLICATION_SCOPE_NAME
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
-import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade // KimiNoBox
+import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
-import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Checkbox
+import org.koin.core.qualifier.named
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.preference.ArrowPreference
+
+private data class GeoFileStatus(
+    val item: GeoXItem,
+    val lastModified: Long?,
+)
+
+/**
+ * What the AGE key dialog is doing. [Closed] keeps the last generated key type so the exit tween does not swap the
+ * dialog title and reset its fields while it fades out.
+ */
+private sealed interface AgeKeyDialog {
+    val hybrid: Boolean
+
+    data class Closed(override val hybrid: Boolean) : AgeKeyDialog
+
+    data class Open(override val hybrid: Boolean) : AgeKeyDialog
+}
 
 @Composable
 fun MetaFeatureScreen(navigator: Navigator) {
     val scrollBehavior = MiuixScrollBehavior()
     val context = LocalContext.current
-    val downloadClient: GeoXDownloadClient = koinInject()
+    val downloadClient: GeoXDownloadClient = koinInject() // KimiNoBox: Sub-Store's client is gone
     val proxyFacade: ProxyFacade = koinInject() // KimiNoBox
 
-    val showGeoXDownloadSheet = remember { mutableStateOf(false) }
+    var geoRefreshKey by remember { mutableStateOf(0) }
+    val runtimeHome = context.runtimeHomeDir
+    val geoStatuses by
+        produceState(
+            geoXItems.map { GeoFileStatus(it, null) },
+            runtimeHome,
+            geoRefreshKey,
+        ) {
+            value =
+                withContext(Dispatchers.IO) {
+                    geoXItems.map { item ->
+                        val file = File(runtimeHome, item.fileName)
+                        GeoFileStatus(item, if (file.exists()) file.lastModified() else null)
+                    }
+                }
+        }
+    val lastUpdated = geoStatuses.mapNotNull { it.lastModified }.maxOrNull()
+    val lastUpdatedText = remember(lastUpdated) { formatGeoLastUpdated(lastUpdated) }
 
     Scaffold(
-        topBar = { TopBar(title = YumeTxt.MetaFeature.Title, scrollBehavior = scrollBehavior) }
+        topBar = {
+            TopBar(
+                title = YumeTxt.Settings.UiSettings.MetaFeatures,
+                scrollBehavior = scrollBehavior,
+            )
+        }
     ) { innerPadding ->
-        val mainLikePadding = rememberStandalonePageMainPadding()
-        ScreenLazyColumn(
+        StandalonePageList(
             scrollBehavior = scrollBehavior,
-            innerPadding = combinePaddingValues(innerPadding, mainLikePadding),
+            scaffoldPadding = innerPadding,
         ) {
+            item { MetaNavigationSection(navigator) }
+            item { MetaTrafficStatisticsSection(navigator) }
             item {
-                Title(YumeTxt.MetaFeature.Section.ConnectionAndTraffic)
-                AppCard {
-                    ArrowPreference(
-                        title = YumeTxt.Connection.Title,
-                        onClick = { navigator.push(Route.Connection) },
-                    )
-                    ArrowPreference(
-                        title = YumeTxt.Log.Title,
-                        onClick = { navigator.push(Route.Log) },
-                    )
-                    ArrowPreference(
-                        title = YumeTxt.MetaFeature.RuntimeRules.Title,
-                        onClick = { navigator.push(Route.Rules) },
-                    )
-                }
-            }
-            item {
-                Title(YumeTxt.MetaFeature.Section.Routing)
-                AppCard {
-                    ArrowPreference(
-                        title = YumeTxt.TrafficStatistics.Title,
-                        onClick = { navigator.push(Route.TrafficStatistics) },
-                    )
-                    // KimiNoBox: custom routing hidden; routing comes from the profile and its overrides
-                    ArrowPreference(
-                        title = YumeTxt.MetaFeature.GeoX.OnlineUpdateTitle,
-                        onClick = { showGeoXDownloadSheet.value = true },
-                    )
-                }
+                GeoXOnlineUpdateSection(
+                    context = context,
+                    downloadClient = downloadClient,
+                    vpnRunning = { proxyFacade.isRunning.value }, // KimiNoBox
+                    lastUpdatedText = lastUpdatedText,
+                    onDownloaded = { geoRefreshKey++ },
+                )
             }
             // KimiNoBox: age key generator hidden (age-encrypted configs are out of scope)
         }
+    }
+}
 
-        GeoXDownloadDialog(
-            show = showGeoXDownloadSheet,
-            context = context,
-            downloadClient = downloadClient,
-            vpnRunning = { proxyFacade.isRunning.value }, // KimiNoBox
+/** Logs and connection entries. */
+@Composable
+private fun MetaNavigationSection(navigator: Navigator) {
+    Title(YumeTxt.MetaFeature.Section.LogsAndConnections)
+    AppCard {
+        PreferenceArrowItem(
+            title = YumeTxt.Settings.More.Logs,
+            onClick = { navigator.push(Route.Log) },
+        )
+        PreferenceArrowItem(
+            title = YumeTxt.Connection.Title,
+            onClick = { navigator.push(Route.Connection) },
+        )
+    }
+    SectionSummary(YumeTxt.MetaFeature.Section.LogsAndConnectionsSummary)
+}
+
+/** Entry point to the traffic statistics page. */
+@Composable
+private fun MetaTrafficStatisticsSection(navigator: Navigator) {
+    Title(YumeTxt.TrafficStatistics.Title)
+    AppCard {
+        PreferenceArrowItem(
+            title = YumeTxt.TrafficStatistics.Title,
+            onClick = { navigator.push(Route.TrafficStatistics) },
         )
     }
 }
 
+/** GeoX online update row plus the formatted last-update summary under it. */
 @Composable
-private fun GeoXDownloadDialog(
-    show: MutableState<Boolean>,
-    context: android.content.Context,
+private fun GeoXOnlineUpdateSection(
+    context: Context,
     downloadClient: GeoXDownloadClient,
     vpnRunning: () -> Boolean, // KimiNoBox
+    lastUpdatedText: String,
+    onDownloaded: () -> Unit,
 ) {
-    val spacing = AppTheme.spacing
-    val selectedItems = remember { mutableStateMapOf<GeoFileType, Boolean>() }
-    val canConfirm = selectedItems.values.any { it }
+    Title(YumeTxt.MetaFeature.GeoX.OnlineUpdateTitle)
+    AppCard {
+        PreferenceArrowItem(
+            title = YumeTxt.MetaFeature.GeoX.OnlineUpdateTitle,
+            onClick = {
+                // KimiNoBox: runs outside the page (see GeoXUpdate.start), keeps the current file when a
+                // download fails, and tells a running core to restart
+                GeoXUpdate.start(context.applicationContext, downloadClient, geoXItems, vpnRunning, onDownloaded)
+            },
+        )
+    }
+    SectionSummary(YumeTxt.MetaFeature.GeoX.OnlineUpdateSummary.format(lastUpdatedText))
+}
 
-    AppDialog(
-        show = show.value,
-        title = YumeTxt.MetaFeature.Download.DialogTitle,
-        onDismissRequest = { show.value = false },
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(spacing.space16),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                geoXItems.forEach { item ->
-                    BasicComponent(
-                        title = item.title,
-                        endActions = {
-                            Checkbox(
-                                state = ToggleableState(selectedItems[item.type] ?: false),
-                                onClick = {
-                                    selectedItems[item.type] = !(selectedItems[item.type] ?: false)
-                                },
-                            )
-                        },
-                        onClick = {
-                            selectedItems[item.type] = !(selectedItems[item.type] ?: false)
-                        },
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(spacing.space16),
-            ) {
-                TextButton(
-                    text = YumeTxt.Component.Button.Cancel,
-                    onClick = { show.value = false },
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(
-                    text = YumeTxt.Component.Button.Confirm,
-                    onClick = {
-                        val itemsToDownload = geoXItems.filter { selectedItems[it.type] == true }
-                        if (itemsToDownload.isEmpty()) {
-                            return@TextButton
-                        }
-                        show.value = false
-                        downloadGeoXFiles(context, downloadClient, itemsToDownload, vpnRunning) // KimiNoBox
-                    },
-                    enabled = canConfirm,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                )
-            }
-        }
+/** The two AGE key generators; [onGenerate] receives whether the hybrid variant was picked. */
+@Composable
+private fun AgeKeySection(onGenerate: (Boolean) -> Unit) {
+    Title(YumeTxt.MetaFeature.AgeKey.Section)
+    AppCard {
+        PreferenceArrowItem(
+            title = YumeTxt.MetaFeature.AgeKey.X25519Title,
+            onClick = { onGenerate(false) },
+        )
+        PreferenceArrowItem(
+            title = YumeTxt.MetaFeature.AgeKey.HybridTitle,
+            onClick = { onGenerate(true) },
+        )
     }
 }
 
-private fun downloadGeoXFiles(
-    context: android.content.Context,
-    downloadClient: GeoXDownloadClient,
-    items: List<GeoXItem>,
-    vpnRunning: () -> Boolean, // KimiNoBox
-) {
-    // KimiNoBox: runs outside the page (see GeoXUpdate.start), keeps the current file when a
-    // download fails, and tells a running core to restart
-    GeoXUpdate.start(context.applicationContext, downloadClient, items, vpnRunning)
-}
+private fun formatGeoLastUpdated(timestamp: Long?): String =
+    if (timestamp == null || timestamp <= 0L) "—" else formatDateTime(timestamp, "yyyy-MM-dd HH:mm")

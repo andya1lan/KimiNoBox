@@ -18,7 +18,6 @@
  *
  */
 
-
 @file:Suppress("JavaDefaultMethodsNotOverriddenByDelegation")
 
 package com.github.yumeyucca.yumebox.core.model
@@ -29,7 +28,7 @@ import com.github.yumeyucca.yumebox.core.util.createListFromParcelSlice
 import com.github.yumeyucca.yumebox.core.util.writeToParcelSlice
 
 class ProviderList(providers: List<Provider>) : List<Provider> by providers, Parcelable {
-    constructor(parcel: Parcel) : this(Provider.createListFromParcelSlice(parcel, 0, 20))
+    constructor(parcel: Parcel) : this(Provider.createListFromParcelSlice(parcel, 20))
 
     override fun describeContents(): Int = 0
 

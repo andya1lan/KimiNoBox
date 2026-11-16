@@ -13,7 +13,6 @@
 
 package com.github.yumeyucca.yumebox.screen.moe
 
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.TextAutoSize // KimiNoBox
 import androidx.compose.runtime.Composable
@@ -21,16 +20,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
-import com.github.yumeyucca.yumebox.common.util.formatBytesForDisplay
+import com.github.yumeyucca.yumebox.common.util.ByteFormatter
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.presentation.component.CountryFlagCircle
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.util.extractFlaggedName
 import com.github.yumeyucca.yumebox.screen.home.NodeDelayTest // KimiNoBox
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -41,18 +39,14 @@ internal fun MoeTrafficStrip(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, Arrangement.spacedBy(MoeUi.Hero.trafficRowGap), Alignment.CenterVertically) {
-        Box(Modifier.weight(1f), Alignment.CenterStart) {
-            MoeTrafficItem(YumeTxt.Home.Traffic.UpShort, uploadSpeed)
-        }
-        Box(Modifier.weight(1f), Alignment.CenterEnd) {
-            MoeTrafficItem(YumeTxt.Home.Traffic.DownShort, downloadSpeed)
-        }
+        Box(Modifier.weight(1f), Alignment.CenterStart) { MoeTrafficItem(YumeTxt.Home.Traffic.UpShort, uploadSpeed) }
+        Box(Modifier.weight(1f), Alignment.CenterEnd) { MoeTrafficItem(YumeTxt.Home.Traffic.DownShort, downloadSpeed) }
     }
 }
 
 @Composable
 private fun MoeTrafficItem(label: String, speed: Long) {
-    val (value, unit) = formatBytesForDisplay(speed)
+    val (value, unit) = ByteFormatter.formatForDisplay(speed)
     val onSurface = MiuixTheme.colorScheme.onSurface
     Row(
         horizontalArrangement = Arrangement.spacedBy(MoeUi.Traffic.itemGap),
@@ -62,7 +56,7 @@ private fun MoeTrafficItem(label: String, speed: Long) {
             text = label,
             color = onSurface.copy(alpha = 0.62f),
             style = MiuixTheme.textStyles.footnote1,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.8.sp,
             modifier = Modifier.padding(bottom = MoeUi.Traffic.labelBottomPadding),
@@ -72,13 +66,13 @@ private fun MoeTrafficItem(label: String, speed: Long) {
             color = onSurface,
             style = MiuixTheme.textStyles.title1,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 24.sp,
+            fontSize = 28.sp,
         )
         Text(
             text = unit,
             color = onSurface.copy(alpha = 0.55f),
             style = MiuixTheme.textStyles.footnote1,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             modifier = Modifier.padding(bottom = MoeUi.Traffic.labelBottomPadding),
         )
     }
@@ -95,18 +89,14 @@ internal fun MoeHomeInfoPanel(
     val node = remember(serverName) { serverName?.let(::extractFlaggedName) }
     val name = node?.displayName ?: serverName.orEmpty()
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = MoeUi.Hero.infoRowMinHeight),
+        modifier = modifier.fillMaxWidth().heightIn(min = MoeUi.Hero.infoRowMinHeight),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (name.isNotBlank()) {
             MoeInfoBlock(
                 value = name,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = MoeUi.Info.trailingPadding),
+                modifier = Modifier.weight(1f).padding(end = MoeUi.Info.trailingPadding),
                 leading = {
                     CountryFlagCircle(
                         countryCode = node?.countryCode,
@@ -114,9 +104,7 @@ internal fun MoeHomeInfoPanel(
                     )
                 },
             )
-        } else Spacer(Modifier
-            .weight(1f)
-            .padding(end = MoeUi.Info.trailingPadding))
+        } else Spacer(Modifier.weight(1f).padding(end = MoeUi.Info.trailingPadding))
         // KimiNoBox: shown untested too, so it can be tapped to test
         if (name.isNotBlank()) {
             NodeDelayTest(
@@ -138,7 +126,6 @@ private fun MoeInfoBlock(
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = MiuixTheme.colorScheme.onBackground,
-    valueFontFamily: FontFamily? = null,
     alignEnd: Boolean = false,
     leading: (@Composable () -> Unit)? = null,
 ) {
@@ -158,7 +145,6 @@ private fun MoeInfoBlock(
             color = valueColor,
             style = style,
             fontWeight = FontWeight.Medium,
-            fontFamily = valueFontFamily,
             maxLines = 1,
             // KimiNoBox: a long node name first shrinks, then loses its middle, so both its region
             // and its number or tags stay readable (it used to be cut off at the end)

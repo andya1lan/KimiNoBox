@@ -21,10 +21,11 @@ package com.github.yumeyucca.yumebox.data.store
 
 import android.content.Context
 import com.github.yumeyucca.yumebox.data.model.BuiltInOverrideCatalog
-import timber.log.Timber
+import com.github.yumeyucca.yumebox.data.model.OverrideContentType
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import timber.log.Timber
 
 /** Keeps materialized built-ins byte-for-byte aligned with the APK assets. */
 class BuiltInOverrideFileStore(
@@ -39,17 +40,12 @@ class BuiltInOverrideFileStore(
             runCatching {
                 val assetBytes = context.assets.open(definition.assetPath).use { it.readBytes() }
                 val assetHash = sha256(assetBytes)
-                val target =
-                    configsDir.resolve("${definition.id}.${definition.contentType.extension}")
-                extensions
+                val target = configsDir.resolve("${definition.id}.${definition.contentType.extension}")
+                OverrideContentType.knownExtensions
                     .filterNot { it == definition.contentType.extension }
-                    .forEach { extension ->
-                        configsDir.resolve("${definition.id}.$extension").delete()
-                    }
+                    .forEach { extension -> configsDir.resolve("${definition.id}.$extension").delete() }
                 val currentHash =
-                    target.takeIf(File::isFile)?.let { file ->
-                        runCatching { sha256(file.readBytes()) }.getOrNull()
-                    }
+                    target.takeIf(File::isFile)?.let { file -> runCatching { sha256(file.readBytes()) }.getOrNull() }
                 if (currentHash == null || !currentHash.contentEquals(assetHash)) {
                     OverrideMetadataIO.writeTextAtomic(
                         target,
@@ -58,18 +54,14 @@ class BuiltInOverrideFileStore(
                 }
                 target
             }
-                .onFailure { error ->
-                    Timber.w(error, "Failed to synchronize built-in override: %s", id)
-                }
+                .onFailure { error -> Timber.w(error, "Failed to synchronize built-in override: %s", id) }
                 .getOrNull()
         }
     }
 
     private companion object {
         private val lock = Any()
-        private val extensions = listOf("yaml", "yml", "js")
 
-        private fun sha256(bytes: ByteArray): ByteArray =
-            MessageDigest.getInstance("SHA-256").digest(bytes)
+        private fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
     }
 }

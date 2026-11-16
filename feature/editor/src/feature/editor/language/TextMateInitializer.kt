@@ -22,8 +22,8 @@
 
 package com.github.yumeyucca.yumebox.feature.editor.language
 
-
 import android.content.Context
+import com.github.yumeyucca.yumebox.core.model.LanguageScope
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
@@ -40,8 +40,8 @@ import timber.log.Timber
 object TextMateInitializer {
     private const val TAG = "TextMateInitializer"
 
-    private const val THEME_DARK = "dark-high-contrast"
-    private const val THEME_LIGHT = "light"
+    private const val THEME_DARK = "cursor-dark"
+    private const val THEME_LIGHT = "cursor-light-colorblind"
 
     private var initialized = false
     private var grammarDefinitions: Map<LanguageScope, GrammarDefinition> = emptyMap()
@@ -76,17 +76,21 @@ object TextMateInitializer {
 
     private fun registerFileProvider(context: Context) {
         Timber.tag(TAG).d("Registering file provider...")
-        FileProviderRegistry.getInstance()
-            .addFileProvider(AssetsFileResolver(context.applicationContext.assets))
+        FileProviderRegistry.getInstance().addFileProvider(AssetsFileResolver(context.applicationContext.assets))
     }
 
     private fun loadThemes() {
         Timber.tag(TAG).d("Loading themes...")
         val themeRegistry = ThemeRegistry.getInstance()
 
-        loadTheme(themeRegistry, THEME_DARK, "textmate/dark-colorblind.json", isDark = true)
+        loadTheme(themeRegistry, THEME_DARK, "textmate/cursor-dark.json", isDark = true)
 
-        loadTheme(themeRegistry, THEME_LIGHT, "textmate/light-colorblind.json", isDark = false)
+        loadTheme(
+            themeRegistry,
+            THEME_LIGHT,
+            "textmate/cursor-light-colorblind.json",
+            isDark = false,
+        )
 
         themeRegistry.setTheme(THEME_DARK)
     }
@@ -118,15 +122,26 @@ object TextMateInitializer {
         Timber.tag(TAG).d("Loading grammars...")
         try {
             val definitions = LanguageDefinitionReader.read("textmate/languages.json")
+            // A language whose display name is missing from languages.json keeps plain-text
+            // editing instead of failing the whole load: one gap must not cost every other
+            // language its highlighting for the rest of the process.
+            val missing = mutableListOf<String>()
             grammarDefinitions =
                 LanguageScope.entries
                     .filterNot { it == LanguageScope.Text }
-                    .associateWith { language ->
-                        definitions.firstOrNull {
-                            it.name.equals(language.displayName, ignoreCase = true)
-                        } ?: error("Grammar definition not found: ${language.displayName}")
+                    .mapNotNull { language ->
+                        definitions
+                            .firstOrNull { it.name.equals(language.displayName, ignoreCase = true) }
+                            ?.let { definition -> language to definition }
+                            ?: run {
+                                missing += language.displayName
+                                null
+                            }
                     }
-            check(grammarDefinitions.isNotEmpty()) { "No TextMate grammar definitions found" }
+                    .toMap()
+            if (missing.isNotEmpty()) {
+                Timber.tag(TAG).w("No grammar definition for: ${missing.joinToString()}")
+            }
             Timber.tag(TAG).d("Grammar definitions loaded successfully")
         } catch (error: Exception) { // fault barrier: TextMate/tm4e throws unspecified exceptions
             Timber.e(error, "Failed to load grammars")
@@ -141,19 +156,16 @@ object TextMateInitializer {
         }
 
         try {
-            val definition =
-                grammarDefinitions[language] ?: error("Grammar not found: ${language.scopeName}")
+            val definition = grammarDefinitions[language] ?: error("Grammar not found: ${language.scopeName}")
             val themeRegistry = ThemeRegistry.getInstance()
             val grammarRegistry =
-                GrammarRegistry(GrammarRegistry.getInstance()).apply {
-                    setTheme(themeRegistry.currentThemeModel)
-                }
+                GrammarRegistry(GrammarRegistry.getInstance()).apply { setTheme(themeRegistry.currentThemeModel) }
             val textMateLanguage =
                 TextMateLanguage.create(
                     definition,
                     grammarRegistry,
                     themeRegistry,
-                    false,
+                    true,
                 )
             editor.setEditorLanguage(textMateLanguage)
             Timber.tag(TAG).d("Language set to: ${language.displayName}")

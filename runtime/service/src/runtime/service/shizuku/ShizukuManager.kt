@@ -22,33 +22,35 @@ package com.github.yumeyucca.yumebox.runtime.service.shizuku
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
 import android.util.Log
+import com.github.yumeyucca.yumebox.common.util.startActivitySafely
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuBinderWrapper
 import rikka.shizuku.SystemServiceHelper
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * Access to the Shizuku / Sui privileged service. Sui needs no explicit initialization here:
- * `rikka.shizuku.ShizukuProvider` (declared in the app manifest) initializes it in its `onCreate`,
- * which runs before `Application.onCreate`.
+ * `rikka.shizuku.ShizukuProvider` (declared in the app manifest) initializes it in its `onCreate`, which runs before
+ * `Application.onCreate`.
  */
 object ShizukuManager {
     private const val TAG = "YumeBoxShizuku"
     private const val XMSF_PACKAGE = "com.xiaomi.xmsf"
     private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
     private const val PERMISSION_REQUEST_CODE = 1001
-    private const val USER_SERVICE_VERSION = 1
+    private const val USER_SERVICE_VERSION = 2
     private const val BIND_TIMEOUT_SECONDS = 3L
 
     /**
-     * Packed builds keep this class in the APK's loader DEX (see :pack), because the packed payload
-     * below /data/user/0/<pkg> is not readable for the shell user Shizuku runs as.
+     * Packed builds keep this class in the APK's loader DEX (see :pack), because the packed payload below
+     * /data/user/0/<pkg> is not readable for the shell user Shizuku runs as.
      */
     private const val LOADER_USER_SERVICE_CLASS = "com.github.yumeyucca.yumebox.loader.ShizukuUserService"
 
@@ -63,7 +65,9 @@ object ShizukuManager {
     // Written by the service connection callback, read from the traffic updater's thread.
     @Volatile private var privilegedService: IPrivilegedService? = null
     @Volatile private var serviceConnected = false
+    @Volatile private var awaitingService = false
     @Volatile private var bindLatch = CountDownLatch(1)
+    @Volatile private var userServiceArgs: Shizuku.UserServiceArgs? = null
     private val bypassMutex = Mutex()
 
     /** Live sessions holding the bypass. The firewall flips only at 0 and 1. */
@@ -73,11 +77,12 @@ object ShizukuManager {
     private var restorePending = false
 
     private val serviceConnection =
-        object : android.content.ServiceConnection {
+        object : ServiceConnection {
             override fun onServiceConnected(
                 name: ComponentName?,
                 binder: IBinder?,
             ) {
+                if (!awaitingService) return
                 if (binder != null && binder.pingBinder()) {
                     privilegedService = IPrivilegedService.Stub.asInterface(binder)
                     serviceConnected = true
@@ -100,19 +105,43 @@ object ShizukuManager {
 
     /** Drops the cached binder and releases a waiting caller instead of letting it time out. */
     private fun resetBinding() {
+        awaitingService = false
         privilegedService = null
         serviceConnected = false
         bindLatch.countDown()
+    }
+
+    private fun resolveUserServiceArgs(context: Context): Shizuku.UserServiceArgs =
+        userServiceArgs
+            ?: synchronized(this) {
+                userServiceArgs
+                    ?: Shizuku.UserServiceArgs(ComponentName(context.applicationContext.packageName, userServiceClass))
+                        .daemon(false)
+                        .processNameSuffix("privileged")
+                        .debuggable(false)
+                        .version(USER_SERVICE_VERSION)
+                        .also { userServiceArgs = it }
+            }
+
+    /** Removes the user service record and lets its process exit instead of keeping it cached. */
+    private fun releasePrivilegedService() {
+        val args = userServiceArgs ?: return
+        awaitingService = false
+        // The remove=true branch does not clear the client-side connection, so drop it first.
+        runCatching { Shizuku.unbindUserService(args, serviceConnection, false) }
+            .onFailure { error -> Log.w(TAG, "Unable to detach the Shizuku user service", error) }
+        runCatching { Shizuku.unbindUserService(args, serviceConnection, true) }
+            .onFailure { error -> Log.w(TAG, "Unable to unbind the Shizuku user service", error) }
+        resetBinding()
     }
 
     fun isAvailable(): Boolean = isRunning() && hasPermission()
 
     fun isRunning(): Boolean = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
 
-    fun hasPermission(): Boolean =
-        runCatching { Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }
-            .onFailure { error -> Log.w(TAG, "Shizuku permission check failed", error) }
-            .getOrDefault(false)
+    fun hasPermission(): Boolean = runCatching {
+        Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+    }.onFailure { error -> Log.w(TAG, "Shizuku permission check failed", error) }.getOrDefault(false)
 
     fun requestPermission(callback: (Boolean) -> Unit) {
         if (!isRunning()) {
@@ -144,61 +173,57 @@ object ShizukuManager {
             }
     }
 
-    fun openShizuku(context: Context): Boolean =
-        runCatching {
-            val intent =
-                context.packageManager.getLaunchIntentForPackage(SHIZUKU_PACKAGE)
-                    ?: return@runCatching false
-            context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-            true
-        }.getOrDefault(false)
+    fun openShizuku(context: Context): Boolean {
+        val intent =
+            runCatching { context.packageManager.getLaunchIntentForPackage(SHIZUKU_PACKAGE) }
+                .onFailure { error -> Log.w(TAG, "Could not resolve the Shizuku launcher", error) }
+                .getOrNull() ?: return false
+        return context.startActivitySafely(intent)
+    }
 
     /**
-     * Takes one hold on the XMSF bypass. HyperOS only keeps an unofficial island while that network
-     * stays down, so the firewall changes when the first holder arrives and when the last one leaves.
+     * Takes one hold on the XMSF bypass. HyperOS only keeps an unofficial island while that network stays down, so the
+     * firewall changes when the first holder arrives and when the last one leaves.
      *
      * Returns false when the firewall could not be changed. A later call retries.
      */
-    suspend fun acquireXmsfBypass(context: Context): Boolean =
-        bypassMutex.withLock {
-            if (restorePending) {
-                restorePending = false
-                return@withLock true
-            }
-            if (bypassHolders > 0) {
-                bypassHolders += 1
-                return@withLock true
-            }
-            if (!isAvailable()) return@withLock false
-            if (!setXmsfNetworkingBlocked(context, blocked = true)) return@withLock false
-            bypassHolders = 1
-            true
+    suspend fun acquireXmsfBypass(context: Context): Boolean = bypassMutex.withLock {
+        if (restorePending) {
+            restorePending = false
+            return@withLock true
         }
+        if (bypassHolders > 0) {
+            bypassHolders += 1
+            return@withLock true
+        }
+        if (!isAvailable()) return@withLock false
+        if (!setXmsfNetworkingBlocked(context, blocked = true)) return@withLock false
+        bypassHolders = 1
+        true
+    }
 
     /**
-     * Drops one hold. Returns false when this hold is still the last one and the firewall restore
-     * failed; the count stays at one so the next release can retry.
+     * Drops one hold. Returns false when this hold is still the last one and the firewall restore failed; the count
+     * stays at one so the next release can retry.
      */
-    suspend fun releaseXmsfBypass(context: Context): Boolean =
-        bypassMutex.withLock {
-            when {
-                bypassHolders > 1 -> {
-                    bypassHolders -= 1
-                    true
-                }
-                bypassHolders == 1 &&
-                    setXmsfNetworkingBlocked(context, blocked = false) -> {
-                    bypassHolders = 0
-                    restorePending = false
-                    true
-                }
-                bypassHolders == 1 -> {
-                    restorePending = true
-                    false
-                }
-                else -> true
+    suspend fun releaseXmsfBypass(context: Context): Boolean = bypassMutex.withLock {
+        when {
+            bypassHolders > 1 -> {
+                bypassHolders -= 1
+                true
             }
+            bypassHolders == 1 && setXmsfNetworkingBlocked(context, blocked = false) -> {
+                bypassHolders = 0
+                restorePending = false
+                true
+            }
+            bypassHolders == 1 -> {
+                restorePending = true
+                false
+            }
+            else -> true
         }
+    }
 
     private fun setXmsfNetworkingBlocked(
         context: Context,
@@ -207,38 +232,42 @@ object ShizukuManager {
         val xmsfUid =
             runCatching { context.packageManager.getPackageUid(XMSF_PACKAGE, 0) }
                 .onFailure { error -> Log.w(TAG, "$XMSF_PACKAGE is not installed", error) }
-                .getOrNull()
-                ?: return false
+                .getOrNull() ?: return false
 
-        getPrivilegedService(context)?.let { service ->
-            return runCatching { service.setPackageNetworkingEnabled(xmsfUid, !blocked) }
-                .onFailure { error -> Log.w(TAG, "User service call failed", error) }
-                .getOrDefault(false)
+        val service = getPrivilegedService(context)
+        try {
+            if (service != null) {
+                return runCatching { service.setPackageNetworkingEnabled(xmsfUid, !blocked) }
+                    .onFailure { error -> Log.w(TAG, "User service call failed", error) }
+                    .getOrDefault(false)
+            }
+
+            // Fallback when the user service cannot be bound: drive the connectivity service
+            // directly through the Shizuku binder, which runs with the same privileged identity.
+            val connectivity = SystemServiceHelper.getSystemService("connectivity") ?: return false
+            return OemDenyFirewall.setPackageDenied(
+                connectivity = ShizukuBinderWrapper(connectivity),
+                uid = xmsfUid,
+                denied = blocked,
+            )
+        } finally {
+            // The firewall rule lives in the connectivity service; the user service is only
+            // needed for this call, so do not leave a privileged process behind.
+            releasePrivilegedService()
         }
-
-        // Fallback when the user service cannot be bound: drive the connectivity service directly
-        // through the Shizuku binder, which runs with the same privileged identity.
-        val connectivity = SystemServiceHelper.getSystemService("connectivity") ?: return false
-        return OemDenyFirewall.setPackageDenied(
-            connectivity = ShizukuBinderWrapper(connectivity),
-            uid = xmsfUid,
-            denied = blocked,
-        )
     }
 
     private fun getPrivilegedService(context: Context): IPrivilegedService? {
-        privilegedService?.takeIf { serviceConnected }?.let { return it }
+        privilegedService
+            ?.takeIf { serviceConnected }
+            ?.let {
+                return it
+            }
 
         return runCatching {
+            awaitingService = true
             bindLatch = CountDownLatch(1)
-            val args =
-                Shizuku
-                    .UserServiceArgs(
-                        ComponentName(context.packageName, userServiceClass),
-                    ).daemon(false)
-                    .processNameSuffix("privileged")
-                    .debuggable(false)
-                    .version(USER_SERVICE_VERSION)
+            val args = resolveUserServiceArgs(context)
             Shizuku.bindUserService(args, serviceConnection)
             if (bindLatch.await(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 privilegedService

@@ -1,5 +1,5 @@
 /*
- * This file is part of YumeBox.
+ * This file is part of KimiNoBox, a modified version of YumeBox.
  *
  * YumeBox is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -14,11 +14,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * Copyright (c)  YumeYucca 2025 - Present
+ * Copyright (c) 2026 KimiNoBox contributors
  *
  */
-
 @file:Suppress("FunctionName", "UsePropertyAccessSyntax")
+
+// KimiNoBox: renders ToastDialogBridge (common/util/ToastDialog.kt), kept from upstream, which removed it.
 
 package com.github.yumeyucca.yumebox.presentation.component
 
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.github.yumeyucca.yumebox.common.util.ToastDialogBridge
 import com.github.yumeyucca.yumebox.common.util.ToastDialogEvent
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
+import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.layout.DialogDefaults
@@ -47,7 +49,6 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 @Composable
 fun ToastDialogHost() {
     val opacity = AppTheme.opacity
-    val radii = AppTheme.radii
     val spacing = AppTheme.spacing
 
     val event by ToastDialogBridge.event.collectAsState()
@@ -91,7 +92,7 @@ fun ToastDialogHost() {
                                     MiuixTheme.colorScheme.primary.copy(
                                         alpha = opacity.subtleStrong
                                     ),
-                                shape = RoundedCornerShape(radii.radius16),
+                                shape = RoundedCornerShape(UiDp.dp16),
                             )
                             .clickable {
                                 val clipboardManager =

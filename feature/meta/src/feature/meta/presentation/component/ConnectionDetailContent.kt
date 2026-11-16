@@ -22,12 +22,13 @@
 
 package com.github.yumeyucca.yumebox.feature.meta.presentation.component
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,13 +38,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.yumeyucca.yumebox.common.util.formatBytes
+import com.github.yumeyucca.yumebox.common.util.ByteFormatter
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.model.ConnectionInfo
-import com.github.yumeyucca.yumebox.core.model.ConnectionMetadata
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.displayTarget
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.hostPort
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.networkName
+import com.github.yumeyucca.yumebox.feature.meta.presentation.util.stringOrEmpty
 import com.github.yumeyucca.yumebox.presentation.component.AppCard
 import com.github.yumeyucca.yumebox.presentation.component.Title
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
+import java.time.DateTimeException
+import kotlinx.coroutines.delay
+import com.github.yumeyucca.yumebox.core.model.ConnectionMetadata // KimiNoBox
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -51,10 +58,11 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private const val CONNECTION_LEADING_ICON_BITMAP_SIZE = 96
+private const val EmptyDurationText = "00:00:00"
 
 /**
- * Full-page connection detail body. Mirrors the settings-style label/value rows (screenshot
- * reference: large title + card groups) instead of the old bottom sheet.
+ * Full-page connection detail body. Mirrors the settings-style label/value rows (screenshot reference: large title +
+ * card groups) instead of the old bottom sheet.
  */
 @Composable
 fun ConnectionDetailContent(
@@ -96,16 +104,16 @@ fun ConnectionDetailContent(
             }
             DetailValueRow(
                 title = YumeTxt.Connection.Detail.Label.Duration,
-                value = state.duration,
+                value = rememberElapsedDuration(connectionInfo.start),
             )
             DetailValueRow(
                 title = YumeTxt.Connection.Detail.Label.Upload,
-                value = formatBytes(connectionInfo.upload),
+                value = ByteFormatter.format(connectionInfo.upload),
                 valueColor = AppTheme.colors.protocol.tcp,
             )
             DetailValueRow(
                 title = YumeTxt.Connection.Detail.Label.Download,
-                value = formatBytes(connectionInfo.download),
+                value = ByteFormatter.format(connectionInfo.download),
                 valueColor = AppTheme.colors.protocol.udp,
             )
         }
@@ -145,9 +153,7 @@ fun ConnectionDetailContent(
             InterruptConnectionButton(
                 isInterrupting = isInterrupting,
                 onInterrupt = onInterrupt,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = spacing.screenHorizontal),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.screenHorizontal),
             )
             Spacer(modifier = Modifier.height(spacing.space12))
         }
@@ -159,10 +165,7 @@ private fun ConnectionHeaderRow(state: ConnectionDetailState) {
     val spacing = AppTheme.spacing
     val sizes = AppTheme.sizes
     Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = spacing.space16, vertical = spacing.space12),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.space16, vertical = spacing.space12),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.space12),
     ) {
@@ -278,8 +281,7 @@ private fun ChainNode(name: String, isActive: Boolean) {
 
     Row(
         modifier =
-            Modifier
-                .clip(RoundedCornerShape(radii.radius8))
+            Modifier.clip(RoundedCornerShape(radii.radius8))
                 .background(backgroundColor)
                 .padding(
                     horizontal = sizes.nodeChainNodeHorizontalPadding,
@@ -291,8 +293,7 @@ private fun ChainNode(name: String, isActive: Boolean) {
         if (isActive) {
             Box(
                 modifier =
-                    Modifier
-                        .size(sizes.nodeChainIndicatorSize)
+                    Modifier.size(sizes.nodeChainIndicatorSize)
                         .clip(CircleShape)
                         .background(appColors.connection.chainActive)
             )
@@ -307,48 +308,49 @@ private fun ChainNode(name: String, isActive: Boolean) {
 }
 
 internal data class ConnectionDetailState(
-    val metadata: ConnectionMetadata,
+    val metadata: ConnectionMetadata, // KimiNoBox
     val displayHost: String,
     val network: String,
     val process: String,
     val sourceAddress: String,
     val destinationAddress: String,
-    val duration: String,
 )
 
 internal fun ConnectionInfo.toDetailState(): ConnectionDetailState {
-    val host = metadata.host
-    val network = metadata.network.ifEmpty { "TCP" }
-    val process = metadata.process
-    val destinationPort = metadata.destinationPort
-    val sourceIP = metadata.sourceIP
-    val sourcePort = metadata.sourcePort
-    val destinationIP = metadata.destinationIP
-
-    val displayHost =
-        when {
-            host.isNotEmpty() && destinationPort.isNotEmpty() -> "$host:$destinationPort"
-            host.isNotEmpty() -> host
-            sourceIP.isNotEmpty() -> "$sourceIP:$sourcePort"
-            else -> ""
-        }
+    val process = metadata.stringOrEmpty("process")
+    val destinationPort = metadata.stringOrEmpty("destinationPort")
+    val sourceIP = metadata.stringOrEmpty("sourceIP")
+    val sourcePort = metadata.stringOrEmpty("sourcePort")
+    val destinationIP = metadata.stringOrEmpty("destinationIP")
 
     return ConnectionDetailState(
         metadata = metadata,
-        displayHost = displayHost,
-        network = network,
+        displayHost = displayTarget(),
+        network = networkName(),
         process = process,
-        sourceAddress = "$sourceIP:$sourcePort",
-        destinationAddress =
-            destinationIP.takeIf(String::isNotEmpty)?.let { "$it:$destinationPort" }.orEmpty(),
-        duration = start.takeIf(String::isNotEmpty)?.let(::calculateDuration) ?: "00:00:00",
+        sourceAddress = hostPort(sourceIP, sourcePort),
+        destinationAddress = hostPort(destinationIP, destinationPort),
     )
 }
 
-private fun calculateDuration(start: String): String {
-    if (start.isEmpty()) return "00:00:00"
+/**
+ * Elapsed time of a live connection, recomputed on every second so the row is not frozen at the moment the detail page
+ * opened.
+ */
+@Composable
+private fun rememberElapsedDuration(start: String): String {
+    val ticks = remember(start) { mutableIntStateOf(0) }
+    LaunchedEffect(start) {
+        while (true) {
+            delay(1_000L)
+            ticks.intValue += 1
+        }
+    }
+    return remember(start, ticks.intValue) { if (start.isEmpty()) EmptyDurationText else calculateDuration(start) }
+}
 
-    return try {
+private fun calculateDuration(start: String): String =
+    try {
         val startTime = java.time.OffsetDateTime.parse(start).toInstant()
         val now = java.time.Instant.now()
         val duration = java.time.Duration.between(startTime, now)
@@ -358,7 +360,6 @@ private fun calculateDuration(start: String): String {
         val seconds = duration.seconds % 60
 
         "%02d:%02d:%02d".format(hours, minutes, seconds)
-    } catch (_: java.time.DateTimeException) {
+    } catch (_: DateTimeException) {
         "00:00:00"
     }
-}

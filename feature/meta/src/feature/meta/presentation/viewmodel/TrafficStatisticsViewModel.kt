@@ -22,21 +22,18 @@
 
 package com.github.yumeyucca.yumebox.feature.meta.presentation.viewmodel
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.controller.AppIdentityResolver
 import com.github.yumeyucca.yumebox.data.model.*
 import com.github.yumeyucca.yumebox.data.store.TrafficStatisticsStore
 import com.github.yumeyucca.yumebox.presentation.component.BarChartItem
+import java.util.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
-import java.util.*
 
-class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStatisticsStore) :
-    ViewModel() {
+class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStatisticsStore) : ViewModel() {
     private val selectedTimeRange = MutableStateFlow(StatisticsTimeRange.TODAY)
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -62,10 +59,6 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
         selectedTimeRange.value = range
     }
 
-    fun clearAllStatistics() {
-        viewModelScope.launch { trafficStatisticsStore.clearAll() }
-    }
-
     private fun buildUiState(
         range: StatisticsTimeRange,
         topApps: List<AppTrafficUsage>,
@@ -74,12 +67,7 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
     ): TrafficStatisticsUiState {
         val totalUpload = topApps.sumOf(AppTrafficUsage::totalUpload)
         val totalDownload = topApps.sumOf(AppTrafficUsage::totalDownload)
-        val summary =
-            DailyTrafficSummary(
-                dateMillis = range.days.toLong(),
-                totalUpload = totalUpload,
-                totalDownload = totalDownload,
-            )
+        val summary = TrafficTotals(totalUpload = totalUpload, totalDownload = totalDownload)
         val bars =
             when (range) {
                 StatisticsTimeRange.TODAY -> buildTodayBars(hourlyTotals)
@@ -102,16 +90,9 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
     }
 
     private fun mergeSystemTraffic(apps: List<AppTrafficUsage>): List<AppTrafficUsage> {
-        val systemApps = apps.filter {
-            it.appKey == AppIdentityResolver.UNKNOWN_APP_KEY ||
-                    it.appKey == TrafficStatisticsBuckets.UNATTRIBUTED_APP_KEY
-        }
+        val (systemApps, regularApps) = apps.partition { it.isSystemTraffic() }
         if (systemApps.isEmpty()) return apps
 
-        val regularApps = apps.filterNot {
-            it.appKey == AppIdentityResolver.UNKNOWN_APP_KEY ||
-                    it.appKey == TrafficStatisticsBuckets.UNATTRIBUTED_APP_KEY
-        }
         val systemTraffic =
             AppTrafficUsage(
                 appKey = TrafficStatisticsBuckets.UNATTRIBUTED_APP_KEY,
@@ -123,6 +104,9 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
             )
         return regularApps + systemTraffic
     }
+
+    private fun AppTrafficUsage.isSystemTraffic(): Boolean =
+        appKey == AppIdentityResolver.UNKNOWN_APP_KEY || appKey == TrafficStatisticsBuckets.UNATTRIBUTED_APP_KEY
 
     private fun buildTodayBars(hourlyTotals: List<HourlyTrafficSummary>): List<BarChartItem> {
         val totalsByHour = hourlyTotals.associateBy { it.hourStartMillis }
@@ -140,8 +124,7 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
     /** Always emit 7 day slots ending today, filling missing days with 0. */
     private fun buildWeekBars(dailyTotals: List<DailyTrafficSummary>): List<BarChartItem> {
         val byDay = dailyTotals.associateBy { it.dateMillis }
-        val today =
-            Calendar.getInstance().apply { timeInMillis = startOfDay(System.currentTimeMillis()) }
+        val today = Calendar.getInstance().apply { timeInMillis = startOfDay(System.currentTimeMillis()) }
         return (6 downTo 0).map { daysAgo ->
             val day = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -daysAgo) }
             val dayStart = day.timeInMillis
@@ -186,8 +169,24 @@ class TrafficStatisticsViewModel(private val trafficStatisticsStore: TrafficStat
 
 data class TrafficStatisticsUiState(
     val selectedTimeRange: StatisticsTimeRange = StatisticsTimeRange.TODAY,
-    val summary: DailyTrafficSummary = DailyTrafficSummary.empty,
+    val summary: TrafficTotals = TrafficTotals.empty,
     val topApps: List<AppTrafficUsage> = emptyList(),
     val chartBars: List<BarChartItem> = emptyList(),
     val chartAverage: Long = 0L,
 )
+
+/**
+ * Transfer totals of the selected [StatisticsTimeRange]. The range is the period, so this type carries no timestamp at
+ * all: a millis-named field must never hold a day count.
+ */
+data class TrafficTotals(
+    val totalUpload: Long = 0L,
+    val totalDownload: Long = 0L,
+) {
+    val total: Long
+        get() = totalUpload + totalDownload
+
+    companion object {
+        val empty = TrafficTotals()
+    }
+}

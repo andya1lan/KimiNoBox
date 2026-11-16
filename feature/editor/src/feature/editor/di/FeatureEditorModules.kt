@@ -22,11 +22,8 @@
 
 package com.github.yumeyucca.yumebox.feature.editor.di
 
-
 import com.github.yumeyucca.yumebox.feature.editor.viewmodel.ConfigEditorViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val featureEditorViewModelModule = module { viewModel { ConfigEditorViewModel() } }
-
-val featureEditorModules = listOf(featureEditorViewModelModule)

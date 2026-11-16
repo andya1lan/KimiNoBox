@@ -18,10 +18,7 @@
  *
  */
 
-@file:Suppress("UnusedSymbol")
-
 package com.github.yumeyucca.yumebox.core.model
-
 
 import kotlinx.serialization.Serializable
 
@@ -57,21 +54,4 @@ data class CompileResult(
     val finalYaml: String = "",
     val warnings: List<String> = emptyList(),
     val error: String? = null,
-)
-
-@Serializable
-data class NativeInspectResult(
-    val success: Boolean,
-    val payload: String = "",
-    val error: String? = null,
-)
-
-@Serializable
-data class CompileRawSummary(
-    val success: Boolean,
-    val fingerprint: String = "",
-    val warnings: List<String> = emptyList(),
-    val error: String? = null,
-    val tunIncludePackage: List<String> = emptyList(),
-    val tunExcludePackage: List<String> = emptyList(),
 )

@@ -22,18 +22,17 @@
 
 package com.github.yumeyucca.yumebox.screen.profiles
 
-
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.store.LinkOpenMode
 import com.github.yumeyucca.yumebox.data.store.ProfileLink
 import com.github.yumeyucca.yumebox.presentation.component.AppActionBottomSheet
 import com.github.yumeyucca.yumebox.presentation.component.AppFormDialog
 import com.github.yumeyucca.yumebox.presentation.component.OemTextField
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 
 @Composable
 internal fun LinkSettingsDialog(
@@ -51,7 +50,6 @@ internal fun LinkSettingsDialog(
         show = show.value,
         title = YumeTxt.ProfilesPage.LinkSettings.Title,
         onDismissRequest = { show.value = false },
-        enableNestedScroll = true,
         content = {
             LinkSettingsContent(
                 links = links,
@@ -80,12 +78,8 @@ internal fun AddLinkDialog(
     onConfirm: () -> Unit,
 ) {
     var error by remember { mutableStateOf("") }
-    var currentName by remember {
-        mutableStateOf(TextFieldValue(linkName, TextRange(linkName.length)))
-    }
-    var currentUrl by remember {
-        mutableStateOf(TextFieldValue(linkUrl, TextRange(linkUrl.length)))
-    }
+    var currentName by remember { mutableStateOf(TextFieldValue(linkName, TextRange(linkName.length))) }
+    var currentUrl by remember { mutableStateOf(TextFieldValue(linkUrl, TextRange(linkUrl.length))) }
 
     LaunchedEffect(show.value, linkToEdit) {
         if (show.value) {
@@ -112,16 +106,21 @@ internal fun AddLinkDialog(
         onConfirm = {
             error =
                 when {
-                    currentName.text.isBlank() ->
+                    currentName.text.isBlank() -> {
                         YumeTxt.ProfilesPage.LinkSettings.Validation.EnterName
+                    }
 
-                    currentUrl.text.isBlank() ->
+                    currentUrl.text.isBlank() -> {
                         YumeTxt.ProfilesPage.LinkSettings.Validation.EnterUrl
+                    }
 
-                    !currentUrl.text.startsWith("http", ignoreCase = true) ->
+                    !currentUrl.text.startsWith("http", ignoreCase = true) -> {
                         YumeTxt.ProfilesPage.LinkSettings.Validation.InvalidUrl
+                    }
 
-                    else -> ""
+                    else -> {
+                        ""
+                    }
                 }
             if (error.isEmpty()) {
                 onNameChange(currentName.text)

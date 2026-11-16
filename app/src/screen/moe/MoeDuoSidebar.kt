@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.screen.moe
 
-import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -40,7 +39,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,14 +63,10 @@ import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.screen.home.HomeProxyControlState
 import com.kyant.shapes.Capsule
-import dev.chrisbanes.haze.ExperimentalHazeApi
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.glass.GlassStyle
-import dev.chrisbanes.haze.glass.RefractionProfile
-import dev.chrisbanes.haze.glass.hazeGlass
+import com.github.yumeyucca.yumebox.presentation.theme.YumeBlur.glassSurface
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -104,6 +98,7 @@ internal object MoeDuoUi {
     val capsuleItemHeight = 52.dp
     val capsulePadding = 4.dp
     val capsuleIconSize = 26.dp
+    const val capsuleBlurRadius = 24f
 }
 
 /**
@@ -117,7 +112,7 @@ internal fun BoxScope.MoeDuoSidebarContent(
     stripWidth: Dp,
     visibleWidth: Dp,
     statusTop: Dp,
-    hazeState: HazeState,
+    glassBackdrop: LayerBackdrop?,
     backdropLayer: GraphicsLayer,
     glassEnabled: Boolean,
     onTestDelay: () -> Unit,
@@ -189,7 +184,7 @@ internal fun BoxScope.MoeDuoSidebarContent(
         )
         MoeDuoShortcutCapsule(
             icons = state.sidebarIcons,
-            hazeState = hazeState,
+            glassBackdrop = glassBackdrop,
             glassEnabled = glassEnabled,
             darkInk = capsuleDarkInk,
             darkness = capsuleDarkness,
@@ -402,35 +397,31 @@ private fun DrawScope.drawPowerGlyph(color: Color) {
     )
 }
 
-/** The Duo's vertical tab bar: icon-only items in one liquid-glass capsule. */
+/** The Duo's vertical tab bar: icon-only items in one frosted-glass capsule. */
 @Composable
 private fun MoeDuoShortcutCapsule(
     icons: List<MoeSidebarIconItem>,
-    hazeState: HazeState,
+    glassBackdrop: LayerBackdrop?,
     glassEnabled: Boolean,
     darkInk: Boolean,
     darkness: Float,
     modifier: Modifier = Modifier,
 ) {
     val surface = MiuixTheme.colorScheme.surface
-    val glassStyle = remember(surface, darkInk) { moeDuoGlassStyle(surface, darkInk) }
-    // Glass needs RenderEffect (API 31); older devices get a plain translucent capsule.
-    val useGlass = glassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val iconTint = lerp(Color.White.copy(alpha = 0.9f), Color.Black.copy(alpha = 0.78f), darkness)
+    // glassSurface falls back to the plain translucent capsule without a backdrop or RuntimeShader.
+    val fallback = if (darkInk) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.18f)
     Column(
         modifier =
             modifier
                 .width(MoeDuoUi.capsuleWidth)
                 .clip(Capsule())
-                .then(
-                    if (useGlass) {
-                        Modifier.moeDuoGlass(hazeState, glassStyle)
-                    } else {
-                        Modifier.background(
-                            if (darkInk) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.18f),
-                            Capsule(),
-                        )
-                    }
+                .glassSurface(
+                    backdrop = glassBackdrop.takeIf { glassEnabled },
+                    shape = Capsule(),
+                    fallbackColor = fallback,
+                    blurRadius = MoeDuoUi.capsuleBlurRadius,
+                    tint = moeDuoCapsuleTint(surface, darkInk),
                 )
                 .padding(vertical = MoeDuoUi.capsulePadding),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -461,42 +452,13 @@ private fun MoeDuoCapsuleItem(item: MoeSidebarIconItem, tint: Color) {
     }
 }
 
-@OptIn(ExperimentalHazeApi::class)
-private fun Modifier.moeDuoGlass(state: HazeState, style: GlassStyle): Modifier =
-    hazeGlass(input = HazeInput.Sources(state), style = style)
-
 /**
- * haze's Regular glass, fully diffused and tinted to match the ink: darkened under white icons so
- * they stay readable over a bright wallpaper, lightened under black icons. haze's dark response
- * follows the system appearance, so a dark app theme writes it out itself.
+ * Tinted to match the ink: darkened under white icons so they stay readable over a bright
+ * wallpaper, lightened under black icons, and the app's own surface in a dark theme.
  */
-@OptIn(ExperimentalHazeApi::class)
-private fun moeDuoGlassStyle(surface: Color, darkInk: Boolean): GlassStyle {
-    val darkTheme = surface.luminance() < 0.5f
-    return GlassStyle.regular.then {
-        shape(RoundedCornerShape(percent = 50))
-        optics(
-            refractionHeightFraction = 0.15f,
-            refractionDisplacement = 48.dp,
-            depth = 1f,
-            blurRadius = 24.dp,
-            refractionDetailIntensity = 0f,
-            refractionProfile = RefractionProfile.Edge(20.dp),
-        )
-        tint(
-            when {
-                darkInk -> Color.White.copy(alpha = 0.34f)
-                darkTheme -> surface.copy(alpha = 0.5f)
-                else -> Color.Black.copy(alpha = 0.16f)
-            }
-        )
-        if (darkTheme && !darkInk) {
-            specularIntensity(0.38f)
-            edgeShadow(Color.Black.copy(alpha = 0.32f))
-            ambientResponse(0.08f)
-            contrast(0.08f)
-            whitePoint(-0.22f)
-            chromaMultiplier(1.1f)
-        }
+private fun moeDuoCapsuleTint(surface: Color, darkInk: Boolean): Color =
+    when {
+        darkInk -> Color.White.copy(alpha = 0.34f)
+        surface.luminance() < 0.5f -> surface.copy(alpha = 0.5f)
+        else -> Color.Black.copy(alpha = 0.16f)
     }
-}

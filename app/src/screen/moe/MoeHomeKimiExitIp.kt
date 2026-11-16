@@ -69,7 +69,7 @@ internal fun MoeCardExternalIp(ip: IpInfo?, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CountryFlagCircle(countryCode = ip.countryCode, size = AppTheme.spacing.space16)
-        MoeCardLabel(YumeTxt.Home.IpInfo.ExitIp)
+        MoeCardLabel(EXIT_IP_LABEL)
         Text(
             text = if (revealed) address else maskIpAddress(address),
             color = MiuixTheme.colorScheme.onBackground,
@@ -80,3 +80,6 @@ internal fun MoeCardExternalIp(ip: IpInfo?, modifier: Modifier = Modifier) {
         )
     }
 }
+
+// Upstream dropped its 「出口 IP」 string with the classic home.
+private const val EXIT_IP_LABEL = "出口 IP"

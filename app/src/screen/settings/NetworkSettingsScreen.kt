@@ -22,42 +22,33 @@
 
 package com.github.yumeyucca.yumebox.screen.settings
 
-import android.net.Uri
-
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.github.yumeyucca.yumebox.data.model.AccessControlMode
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.model.RunMode
 import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.icon.Yume
-import com.github.yumeyucca.yumebox.presentation.icon.yume.CPU
 import com.github.yumeyucca.yumebox.presentation.icon.yume.PlaneTakeoff
-import com.github.yumeyucca.yumebox.presentation.icon.yume.Tun
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.runtime.service.core.KernelManager
+import io.github.yumeyucca.lucide.Lucide
+import io.github.yumeyucca.lucide.lucide.Ghost
+import io.github.yumeyucca.lucide.lucide.MonitorSmartphone
 import org.koin.androidx.compose.koinViewModel
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 
 /**
- * Network settings entry point. Top: a "run mode" radio picker — one card per mode.
- * `RunMode.VpnService` is always available; root-only cards are greyed out unless
- * root is granted. Below: advanced options (service config + disable-overrides) and access control.
- * The former parallel HTTP "system proxy" run mode is gone.
+ * Network settings entry point. Top: a "run mode" dropdown row shaped like the active-kernel picker, listing
+ * VpnService, Tun and eBPF. `VpnService` is always selectable; Tun needs root and eBPF needs root plus an eBPF-capable
+ * kernel, and an unavailable mode is greyed out in the list instead of being hidden. Below: advanced options (service
+ * config + disable-overrides) and the kernel section.
  */
 @Composable
 fun NetworkSettingsScreen(navigator: Navigator) {
@@ -65,103 +56,181 @@ fun NetworkSettingsScreen(navigator: Navigator) {
     val viewModel = koinViewModel<NetworkSettingsViewModel>()
     val screen by viewModel.networkScreenState.collectAsState()
     val disableAllOverride = screen.disableAllOverride
-    val accessControlMode = screen.accessControlMode
     val runMode = screen.runMode
-    // Root Tun is only selectable when root is granted; otherwise its card is greyed
-    // out.
+    // Root modes are only selectable when root is granted; otherwise their list entries are
+    // greyed out.
     val rootAvailable = screen.rootAvailable
     val ebpfAvailable = screen.ebpfAvailable
-    val kernels = screen.kernels
-    val context = LocalContext.current
     var showKernelDialog by remember { mutableStateOf(false) }
-    var showCustomKernelDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = { TopBar(title = YumeTxt.NetworkSettings.Title, scrollBehavior = scrollBehavior) }
-    ) { innerPadding ->
-        val mainLikePadding = rememberStandalonePageMainPadding()
-        ScreenLazyColumn(
+    GlassScaffold(topBar = { TopBar(title = YumeTxt.NetworkSettings.Title, scrollBehavior = scrollBehavior) }) {
+        innerPadding ->
+        StandalonePageList(
             scrollBehavior = scrollBehavior,
-            innerPadding = combinePaddingValues(innerPadding, mainLikePadding),
+            scaffoldPadding = innerPadding,
         ) {
+            // KimiNoBox: VPN Service only; the TUN and eBPF (root) modes are hidden
             item {
-                Title(YumeTxt.NetworkSettings.RunMode.SectionTitle)
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ModeCard(
-                        icon = Yume.PlaneTakeoff,
-                        title = YumeTxt.NetworkSettings.RunMode.VpnServiceTitle,
-                        summary = YumeTxt.NetworkSettings.RunMode.VpnServiceSummary,
-                        selected = runMode == RunMode.VpnService,
-                        enabled = true,
-                        onSelect = { viewModel.onRunModeChange(RunMode.VpnService) },
-                    )
-                    // KimiNoBox: VPN Service only; the TUN and eBPF (root) cards are hidden
-                }
+                AdvancedOptionsSection(
+                    viewModel = viewModel,
+                    runMode = runMode,
+                    disableAllOverride = disableAllOverride,
+                    navigator = navigator,
+                )
             }
-            item {
-                Title(YumeTxt.NetworkSettings.Section.Advanced)
-                AppCard {
-                    PreferenceArrowItem(
-                        title = YumeTxt.NetworkSettings.Section.VpnOptions,
-                        // Each mode's service config lives behind its own page.
-                        onClick = {
-                            when (runMode) {
-                                RunMode.VpnService -> navigator.push(Route.VpnServiceOptions)
-                                RunMode.Tun -> navigator.push(Route.TunServiceOptions)
-                                RunMode.Ebpf -> navigator.push(Route.EbpfServiceOptions)
-                            }
-                        },
-                    )
-                    PreferenceSwitchItem(
-                        title = YumeTxt.NetworkSettings.Advanced.DisableOverrideTitle,
-                        checked = disableAllOverride,
-                        onCheckedChange = viewModel::onDisableAllOverrideChange,
-                    )
-                }
-            }
-            // KimiNoBox: kernel selection/download section removed; the core is locked
-            item {
-                Title(YumeTxt.NetworkSettings.Section.ProxyOptions)
-                AppCard {
-                    PreferenceEnumItem(
-                        title = YumeTxt.NetworkSettings.ProxyOptions.AccessControlModeTitle,
-                        currentValue = accessControlMode,
-                        items =
-                            listOf(
-                                YumeTxt.NetworkSettings.ProxyOptions.AllowAll,
-                                YumeTxt.NetworkSettings.ProxyOptions.AllowSelected,
-                                YumeTxt.NetworkSettings.ProxyOptions.RejectSelected,
-                            ),
-                        values = AccessControlMode.entries,
-                        onValueChange = viewModel::onAccessControlModeChange,
-                    )
-                    PreferenceArrowItem(
-                        title = YumeTxt.NetworkSettings.ProxyOptions.ManageAccessControlTitle,
-                        onClick = { navigator.push(Route.AccessControl) },
-                    )
-                }
-            }
+            // KimiNoBox: kernel selection and download removed; the core is the bundled locked release
         }
-        // KimiNoBox: KernelSelectionDialog / CustomKernelSheet entry points removed with the section
     }
 }
 
+/** The run-mode dropdown and the note explaining what each mode needs. */
 @Composable
-private fun kernelLabel(id: String, commit: String? = null): String {
-    val name = when (id) {
-        "bundled-alpha" -> YumeTxt.NetworkSettings.Kernel.BundledAlpha
-        "alpha" -> "Alpha"
-        "mate" -> "Mate"
-        "meta" -> "Meta"
-        "smart" -> "Smart"
-        "ebpf" -> "eBPF"
-        else -> KernelManager.installedName(LocalContext.current, id)
+private fun RunModeSection(
+    viewModel: NetworkSettingsViewModel,
+    runMode: RunMode,
+    rootAvailable: Boolean,
+    ebpfAvailable: Boolean,
+) {
+    Title(YumeTxt.NetworkSettings.RunMode.SectionTitle)
+    AppCard {
+        // Same dropdown row as the active-kernel picker. Every mode stays listed; a
+        // mode missing root or an eBPF-capable kernel is greyed out instead of hidden.
+        GlassDropdownPreference(
+            options =
+                RunMode.entries.map { mode ->
+                    GlassDropdownOption(
+                        value = mode,
+                        label = mode.title,
+                        icon = mode.icon,
+                        enabled =
+                            when (mode) {
+                                RunMode.VpnService -> true
+                                RunMode.Tun -> rootAvailable
+                                RunMode.Ebpf -> rootAvailable && ebpfAvailable
+                            },
+                    )
+                },
+            selected = runMode,
+            title = YumeTxt.NetworkSettings.RunMode.CurrentTitle,
+            onSelected = viewModel::onRunModeChange,
+        )
     }
+    // One short note supplementing the row above: what each mode needs.
+    SectionSummary(YumeTxt.NetworkSettings.RunMode.Notice)
+}
+
+/** Advanced options: the per-mode service config page and the disable-overrides switch. */
+@Composable
+private fun AdvancedOptionsSection(
+    viewModel: NetworkSettingsViewModel,
+    runMode: RunMode,
+    disableAllOverride: Boolean,
+    navigator: Navigator,
+) {
+    Title(YumeTxt.NetworkSettings.Section.Advanced)
+    AppCard {
+        PreferenceArrowItem(
+            title = YumeTxt.NetworkSettings.Section.VpnOptions,
+            enabled = runMode != RunMode.Ebpf,
+            // Each mode's service config lives behind its own page.
+            onClick = {
+                when (runMode) {
+                    RunMode.VpnService -> navigator.push(Route.VpnServiceOptions)
+                    RunMode.Tun -> navigator.push(Route.TunServiceOptions)
+                    RunMode.Ebpf -> Unit
+                }
+            },
+        )
+    }
+    SectionSummary(YumeTxt.NetworkSettings.Advanced.ServiceOptionsSummary)
+
+    AppCard {
+        PreferenceSwitchItem(
+            title = YumeTxt.NetworkSettings.Advanced.DisableOverrideTitle,
+            checked = disableAllOverride,
+            onCheckedChange = viewModel::onDisableAllOverrideChange,
+        )
+    }
+    SectionSummary(YumeTxt.NetworkSettings.Advanced.DisableOverrideSummary)
+}
+
+/** Installed-kernel picker plus the refresh row that opens the download dialog. */
+@Composable
+private fun KernelSection(
+    screen: NetworkSettingsViewModel.NetworkSettingsScreenState,
+    viewModel: NetworkSettingsViewModel,
+    onRequestRefresh: () -> Unit,
+) {
+    Title(YumeTxt.NetworkSettings.Section.Kernel)
+    AppCard {
+        // Installed kernels come from the view model, which reads them off the main
+        // thread; probing them here would run an ELF scan per candidate per frame.
+        val installed = screen.installedKernels.associateBy { it.id }
+        val kernelIds = (listOf(KernelManager.BUNDLED_ALPHA_ID) + installed.keys).distinct()
+        GlassDropdownPreference(
+            title = YumeTxt.NetworkSettings.Kernel.ActiveTitle,
+            summary = null,
+            options =
+                kernelIds.map { id ->
+                    GlassDropdownOption(
+                        id,
+                        kernelLabel(id, installed[id]?.commit, installed[id]?.name),
+                    )
+                },
+            selected = screen.activeKernelId,
+            enabled = !screen.kernelBusy,
+            onSelected = viewModel::selectKernel,
+        )
+        PreferenceArrowItem(
+            title = YumeTxt.NetworkSettings.Kernel.RefreshTitle,
+            summary = null,
+            onClick = onRequestRefresh,
+        )
+    }
+    SectionSummary(YumeTxt.NetworkSettings.Kernel.SectionSummary)
+}
+
+/** Label of a run mode inside the mode dropdown. */
+private val RunMode.title: String
+    get() =
+        when (this) {
+            RunMode.VpnService -> YumeTxt.NetworkSettings.RunMode.VpnServiceTitle
+            RunMode.Tun -> YumeTxt.NetworkSettings.RunMode.TunTitle
+            RunMode.Ebpf -> YumeTxt.NetworkSettings.RunMode.EbpfTitle
+        }
+
+/** Leading icon of a run mode inside the mode dropdown. */
+private val RunMode.icon: ImageVector
+    get() =
+        when (this) {
+            RunMode.VpnService -> Yume.PlaneTakeoff
+            RunMode.Tun -> Lucide.MonitorSmartphone
+            RunMode.Ebpf -> Lucide.Ghost
+        }
+
+private fun kernelLabel(id: String, commit: String? = null, name: String? = null): String {
+    val label =
+        when (id) {
+            KernelManager.BUNDLED_ALPHA_ID -> YumeTxt.NetworkSettings.Kernel.BundledAlpha
+            "alpha" -> "Alpha"
+            "mate" -> "Mate"
+            "meta" -> "Meta"
+            "smart" -> "Smart"
+            "ebpf" -> "eBPF"
+            else -> name ?: id
+        }
     return if (id == KernelManager.BUNDLED_ALPHA_ID || commit == null) {
-        name
+        label
     } else {
-        "$name-${commit.take(6)}"
+        "$label-${commit.take(6)}"
     }
+}
+
+/** What the kernel download dialog shows: a spinner, a fetch button, or the kernel list. */
+private enum class KernelDialogContent {
+    Busy,
+    Empty,
+    List,
 }
 
 @Composable
@@ -175,9 +244,10 @@ private fun KernelSelectionDialog(
     val spacing = AppTheme.spacing
     var selectedIds by remember(show) { mutableStateOf<Set<String>>(emptySet()) }
     var initialized by remember(show) { mutableStateOf(false) }
-    LaunchedEffect(show) {
-        if (show) onRefresh()
+    val toggleSelection: (String) -> Unit = { id ->
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
+    LaunchedEffect(show) { if (show) onRefresh() }
     LaunchedEffect(show, screen.kernels) {
         if (show && screen.kernels.isNotEmpty() && !initialized) {
             selectedIds = screen.kernels.map { it.id }.toSet()
@@ -185,52 +255,47 @@ private fun KernelSelectionDialog(
         }
     }
     AppDialog(show = show, title = YumeTxt.NetworkSettings.Kernel.DownloadTitle, onDismissRequest = onDismiss) {
-        val contentState = when {
-            screen.kernelBusy -> 0
-            screen.kernels.isEmpty() -> 1
-            else -> 2
-        }
+        val content =
+            when {
+                screen.kernelBusy -> KernelDialogContent.Busy
+                screen.kernels.isEmpty() -> KernelDialogContent.Empty
+                else -> KernelDialogContent.List
+            }
         AnimatedContent(
-            targetState = contentState,
-            transitionSpec = {
-                fadeIn(tween(140)) togetherWith fadeOut(tween(90)) using SizeTransform(clip = false)
-            },
+            targetState = content,
+            transitionSpec = { fadeIn(tween(140)) togetherWith fadeOut(tween(90)) using SizeTransform(clip = false) },
             label = "kernel_dialog_content",
         ) { state ->
             when (state) {
-                0 ->
+                KernelDialogContent.Busy ->
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = spacing.space24),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = spacing.space24),
                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                     ) {
                         InfiniteProgressIndicator(modifier = Modifier.size(32.dp))
                     }
-                1 ->
+                KernelDialogContent.Empty ->
                     TextButton(
                         text = YumeTxt.NetworkSettings.Kernel.FetchButton,
                         onClick = onRefresh,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = spacing.space8),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = spacing.space8),
                         colors = ButtonDefaults.textButtonColorsPrimary(),
                     )
-                else ->
+                KernelDialogContent.List ->
                     Column(verticalArrangement = Arrangement.spacedBy(spacing.space4)) {
-                        screen.kernels.map { it.id to kernelLabel(it.id, it.commit) }
+                        screen.kernels
+                            .map { kernel ->
+                                val installedName = screen.installedKernels.firstOrNull { it.id == kernel.id }?.name
+                                kernel.id to kernelLabel(kernel.id, kernel.commit, installedName)
+                            }
                             .forEach { (id, label) ->
                                 BasicComponent(
                                     title = label,
-                                    onClick = {
-                                        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
-                                    },
+                                    onClick = { toggleSelection(id) },
                                     endActions = {
                                         Checkbox(
                                             state = ToggleableState(selectedIds.contains(id)),
-                                            onClick = {
-                                                selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
-                                            },
+                                            onClick = { toggleSelection(id) },
                                         )
                                     },
                                 )
@@ -239,176 +304,11 @@ private fun KernelSelectionDialog(
                             text = YumeTxt.NetworkSettings.Kernel.DownloadButton,
                             onClick = { onDownload(selectedIds) },
                             enabled = selectedIds.isNotEmpty(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = spacing.space16),
+                            modifier = Modifier.fillMaxWidth().padding(top = spacing.space16),
                             colors = ButtonDefaults.textButtonColorsPrimary(),
                         )
                     }
             }
-        }
-    }
-}
-
-@Composable
-private fun CustomKernelSheet(
-    show: Boolean,
-    busy: Boolean,
-    onInstallUrl: (String) -> Unit,
-    onInstallFile: (Uri) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var mode by remember(show) { mutableStateOf(0) }
-    var url by remember(show) { mutableStateOf(TextFieldValue()) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        onInstallFile(uri)
-    }
-    AppActionBottomSheet(
-        show = show,
-        title = YumeTxt.NetworkSettings.Kernel.CustomTitle,
-        onDismissRequest = onDismiss,
-        startAction = { AppBottomSheetCloseAction(onClick = onDismiss) },
-        endAction = {
-            AppBottomSheetConfirmAction(
-                enabled = !busy &&
-                    (mode == 1 || url.text.trim().startsWith("https://")),
-                onClick = {
-                    if (mode == 0) {
-                        onInstallUrl(url.text)
-                    } else {
-                        launcher.launch(arrayOf("application/zip", "application/octet-stream"))
-                    }
-                },
-            )
-        },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = AppTheme.spacing.space16),
-            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.space12),
-        ) {
-            AppCard(applyHorizontalPadding = false) {
-                WindowDropdownPreference(
-                    title = YumeTxt.NetworkSettings.Kernel.CustomMethodTitle,
-                    items = listOf(
-                        YumeTxt.NetworkSettings.Kernel.CustomUrlMethod,
-                        YumeTxt.NetworkSettings.Kernel.CustomFileMethod,
-                    ),
-                    selectedIndex = mode,
-                    onSelectedIndexChange = { mode = it },
-                )
-            }
-            AnimatedContent(
-                targetState = mode,
-                transitionSpec = {
-                    fadeIn(tween(160)) togetherWith fadeOut(tween(100)) using
-                        SizeTransform(clip = false)
-                },
-                label = "custom_kernel_method",
-            ) { selectedMode ->
-                if (selectedMode == 0) {
-                    OemTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = YumeTxt.NetworkSettings.Kernel.CustomUrlLabel,
-                        useLabelAsPlaceholder = true,
-                        enabled = !busy,
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    AppCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        applyHorizontalPadding = false,
-                    ) {
-                        PreferenceArrowItem(
-                            title = YumeTxt.NetworkSettings.Kernel.CustomChooseFile,
-                            onClick = {
-                                if (!busy) {
-                                    launcher.launch(arrayOf("application/zip", "application/octet-stream"))
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-            AnimatedVisibility(visible = busy) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    InfiniteProgressIndicator(modifier = Modifier.size(24.dp))
-                }
-            }
-        }
-    }
-}
-
-/**
- * A run-mode option: its own card with the home-mode icon on the leading side and a trailing
- * selection radio. A disabled mode greys its contents and can't be selected.
- */
-@Composable
-private fun ModeCard(
-    icon: ImageVector,
-    title: String,
-    summary: String,
-    selected: Boolean,
-    enabled: Boolean,
-    onSelect: () -> Unit,
-) {
-    AppCard {
-        BasicComponent(
-            enabled = enabled,
-            onClick = if (enabled) onSelect else null,
-            startAction = {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint =
-                        if (enabled) {
-                            top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface
-                        } else {
-                            top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.disabledOnSecondaryVariant
-                        },
-                    modifier = Modifier
-                        .padding(start = 4.dp, end = 12.dp)
-                        .size(24.dp),
-                )
-            },
-            endActions = {
-                RadioButton(
-                    selected = selected,
-                    onClick = if (enabled) onSelect else null,
-                    enabled = enabled,
-                )
-            },
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = title,
-                    fontSize = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.headline1.fontSize,
-                    fontWeight = FontWeight.Medium,
-                    color =
-                        if (enabled) {
-                            top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground
-                        } else {
-                            top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.disabledOnSecondaryVariant
-                        },
-                )
-            }
-            Text(
-                text = summary,
-                fontSize = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.body2.fontSize,
-                color =
-                    if (enabled) {
-                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantSummary
-                    } else {
-                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.disabledOnSecondaryVariant
-                    },
-            )
         }
     }
 }

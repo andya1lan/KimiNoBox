@@ -22,7 +22,6 @@
 
 package com.github.yumeyucca.yumebox.screen.moe
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -44,14 +43,23 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.*
 import kotlin.math.abs
 
-private val moeSpacing = Spacing()
-private val moeRadii = Radii()
-private val moeSizes = Sizes()
-private val moeOpacity = Opacity()
+private val moeSpacing = AppTheme.spacing
+private val moeRadii = AppTheme.radii
+private val moeSizes = AppTheme.sizes
+private val moeOpacity = AppTheme.opacity
 
 internal object MoeUi {
     object Shape {
-        val heroRadius = moeSpacing.space28
+        /** Real screen corners below this read as flat, so the panel keeps its own radius. */
+        private val minimumSystemCorner = UiDp.dp16
+        private val fallbackPanelCorner = UiDp.dp24
+
+        /** Panel radius: the real screen corner once it is readable, a stable default otherwise. */
+        fun panelCorner(systemCorner: Dp): Dp = if (systemCorner < minimumSystemCorner) fallbackPanelCorner else systemCorner
+
+        /** Hero corner follows the device corner, pulled in slightly like the Moe panel's radius. */
+        fun heroCornerRadius(deviceCorner: Dp): Dp = (deviceCorner - moeSpacing.space2).coerceAtLeast(UiDp.dp14)
+
         val launchButton = RoundedCornerShape(moeRadii.full)
         val launchButtonRadius = moeRadii.full
     }
@@ -59,7 +67,6 @@ internal object MoeUi {
     object Sidebar {
         const val fraction = 0.25f
         val contentOverlap = moeSpacing.space28
-        val innerHorizontalPadding = moeSpacing.space12
         val topInset = moeSizes.heroStartButtonSize - moeSpacing.space2
         val bottomInset = moeSpacing.space32 + moeSpacing.space6
         val timeGap = moeSpacing.space12
@@ -83,23 +90,23 @@ internal object MoeUi {
     }
 
     object Hero {
-        const val heightFraction = 0.63f
-        val containerHorizontalInset = moeSpacing.space12
+        const val heightFraction = 0.67f
+
+        /** Rest scale of the hero card while the pager sits on another page. */
+        const val pageTurnScale = 0.965f
+        val containerHorizontalInset = moeSpacing.space10
         val contentHorizontalInset = moeSpacing.space12
         val trafficRowGap = moeSpacing.space28
-        val trafficBottomInset = moeSpacing.space12
-        val runtimeInfoTopGap = moeSpacing.space16
+        val trafficBottomInset = moeSpacing.space6
+        val runtimeInfoTopGap = moeSpacing.space20
         val delayWidth = moeSizes.nodeDelayColumnWidth
         val belowHeroTopGap = moeSpacing.space14
         val belowHeroContentGap = moeSpacing.space12
         val launchTopGap = moeSpacing.space24
-        val infoPlaceholderAlpha = moeOpacity.surfaceSoft
         val infoRowMinHeight = moeSpacing.space24
-        val infoPlaceholderNodeWidth = moeSizes.homeIdleTopPadding - moeSpacing.space8
     }
 
     object Button {
-        val bottomInset = moeSpacing.space16
         val height = UiDp.dp46
         val circleSize = UiDp.dp46
         val controlGap = moeSpacing.space10
@@ -113,10 +120,14 @@ internal object MoeUi {
 
     object Quote {
         val contentGap = moeSpacing.space12
-        val eyebrowSize = 17.sp
-        val textSize = 23.sp
-        val lineHeight = 31.sp
-        const val eyebrowAlpha = 0.56f
+        val greetingSize = 28.sp
+        val greetingLineHeight = 34.sp
+        val textSize = 16.sp
+        val lineHeight = 22.sp
+        val authorSize = 11.sp
+        val quoteTopGap = moeSpacing.space6
+        val authorTopGap = moeSpacing.space4
+        const val authorAlpha = 0.56f
     }
 
     object Traffic {
@@ -171,13 +182,7 @@ private fun MoeSidebarValueStack(
         verticalArrangement = Arrangement.spacedBy(MoeUi.Sidebar.timeGap),
     ) {
         MoeSidebarTimeValue(value = topValue)
-        Box(
-            modifier =
-                Modifier
-                    .width(MoeUi.Sidebar.dividerWidth)
-                    .height(MoeUi.Sidebar.dividerHeight)
-                    .background(Color.White.copy(alpha = MoeUi.Sidebar.dividerAlpha))
-        )
+        MoeSidebarDivider()
         MoeSidebarTimeValue(value = bottomValue)
     }
 }
@@ -204,7 +209,8 @@ private fun MoeSidebarIconItemView(item: MoeSidebarIconItem) {
                 .clickable(
                     interactionSource =
                         remember {
-                            androidx.compose.foundation.interaction.MutableInteractionSource()
+                            androidx.compose.foundation.interaction
+                                .MutableInteractionSource()
                         },
                     indication = null,
                     onClick = item.onClick,
@@ -239,7 +245,10 @@ private fun MoeSidebarTimeValue(value: String) {
 }
 
 @Composable
-private fun MoeSidebarStatusStack(batteryPercent: Int?, modifier: Modifier = Modifier) {
+private fun MoeSidebarStatusStack(
+    batteryPercent: Int?,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -277,7 +286,7 @@ private fun MoeBatteryCapsule(percent: Int?) {
                         .fillMaxWidth(fillFraction)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(moeRadii.full))
-                        .background(Color.White.copy(alpha = 0.86f))
+                        .background(Color.White.copy(alpha = 0.86f)),
             )
         }
         Box(
@@ -286,7 +295,7 @@ private fun MoeBatteryCapsule(percent: Int?) {
                     .width(MoeUi.Sidebar.batteryKnobWidth)
                     .height(MoeUi.Sidebar.batteryHeight * 0.46f)
                     .clip(RoundedCornerShape(moeRadii.full))
-                    .background(Color.White.copy(alpha = 0.54f))
+                    .background(Color.White.copy(alpha = 0.54f)),
         )
     }
 }
@@ -298,7 +307,7 @@ private fun MoeSidebarDivider() {
             Modifier
                 .width(MoeUi.Sidebar.dividerWidth)
                 .height(MoeUi.Sidebar.dividerHeight)
-                .background(Color.White.copy(alpha = MoeUi.Sidebar.dividerAlpha))
+                .background(Color.White.copy(alpha = MoeUi.Sidebar.dividerAlpha)),
     )
 }
 
@@ -307,12 +316,22 @@ internal enum class MoeWallpaperQualityMode {
     BackgroundBlur,
 }
 
-internal fun lerpFloat(start: Float, stop: Float, progress: Float): Float =
-    start + (stop - start) * progress
+internal fun lerpFloat(
+    start: Float,
+    stop: Float,
+    progress: Float,
+): Float = start + (stop - start) * progress
 
-internal fun lerpDp(start: Dp, stop: Dp, progress: Float): Dp = start + (stop - start) * progress
+internal fun lerpDp(
+    start: Dp,
+    stop: Dp,
+    progress: Float,
+): Dp = start + (stop - start) * progress
 
-internal fun calculateHomeVisibility(currentPage: Int, currentPageOffsetFraction: Float): Float {
+internal fun calculateHomeVisibility(
+    currentPage: Int,
+    currentPageOffsetFraction: Float,
+): Float {
     val offset = abs(currentPage.toFloat() + currentPageOffsetFraction)
     return 1f - offset.coerceIn(0f, 1f)
 }
@@ -328,8 +347,8 @@ internal data class MoeDurationPair(
 )
 
 /**
- * Wall-clock variant used while idle: maps an epoch timestamp to the current local hour/minute so
- * the rail shows the real time (top = HH, bottom = mm) instead of a frozen 00 / 00.
+ * Wall-clock variant used while idle: maps an epoch timestamp to the current local hour/minute so the rail shows the
+ * real time (top = HH, bottom = mm) instead of a frozen 00 / 00.
  */
 internal fun formatMoeClock(nowMillis: Long): MoeDurationPair {
     val calendar = Calendar.getInstance().apply { timeInMillis = nowMillis }

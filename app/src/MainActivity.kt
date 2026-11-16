@@ -20,9 +20,11 @@
 
 package com.github.yumeyucca.yumebox
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -42,27 +44,30 @@ import com.github.yumeyucca.yumebox.common.util.AppLanguageManager
 import com.github.yumeyucca.yumebox.common.util.AutoStartDependencies
 import com.github.yumeyucca.yumebox.common.util.IntentController
 import com.github.yumeyucca.yumebox.common.util.ProxyAutoStartHelper
+import com.github.yumeyucca.yumebox.common.util.startActivitySafely
 import com.github.yumeyucca.yumebox.core.util.AutoStartSessionGate
 import com.github.yumeyucca.yumebox.core.util.StartupTaskCoordinator
 import com.github.yumeyucca.yumebox.data.store.AppSettingsStore
 import com.github.yumeyucca.yumebox.data.store.FeatureStore
+import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
 import com.github.yumeyucca.yumebox.di.APPLICATION_SCOPE_NAME
-import com.github.yumeyucca.yumebox.presentation.component.LocalTopBarHazeState
-import com.github.yumeyucca.yumebox.presentation.component.LocalTopBarHazeStyle
-import com.github.yumeyucca.yumebox.presentation.component.ToastDialogHost
+import com.github.yumeyucca.yumebox.presentation.component.ToastDialogHost // KimiNoBox
+import com.github.yumeyucca.yumebox.presentation.component.YumeAppShell
 import com.github.yumeyucca.yumebox.presentation.navigation.AppNavContainer
 import com.github.yumeyucca.yumebox.presentation.navigation.AppNavigationComponent
-import com.github.yumeyucca.yumebox.presentation.theme.ProvideAndroidPlatformTheme
-import com.github.yumeyucca.yumebox.presentation.theme.YumeHaze
-import com.github.yumeyucca.yumebox.presentation.theme.YumeTheme
+import com.github.yumeyucca.yumebox.presentation.navigation.DeepLink
+import com.github.yumeyucca.yumebox.presentation.navigation.deepLinkOf
+import com.github.yumeyucca.yumebox.runtime.api.appContextOrSelf
+import com.github.yumeyucca.yumebox.runtime.client.ProfilesRepository
+import com.github.yumeyucca.yumebox.runtime.client.ProxyFacade
+import com.github.yumeyucca.yumebox.runtime.api.Components // KimiNoBox
 import com.github.yumeyucca.yumebox.screen.home.NodeSourceEmptyHint // KimiNoBox
-import com.github.yumeyucca.yumebox.runtime.api.Components
 import com.github.yumeyucca.yumebox.runtime.service.WifiAutomationService
 import com.github.yumeyucca.yumebox.screen.moe.HomePreviewGuideDialog
 import com.github.yumeyucca.yumebox.screen.moe.SystemWallpaperAccess
 import com.github.yumeyucca.yumebox.screen.settings.AppSettingsViewModel
 import com.tencent.mmkv.MMKV
-import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +76,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.qualifier.named
+import timber.log.Timber
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -89,7 +95,6 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val REQUEST_STARTUP_PERMISSIONS = 1001
         private const val REQUEST_SYSTEM_WALLPAPER_PERMISSION = 1002
-        private const val EXTRA_EXIT_UI_WHEN_BACKGROUND = "exit_ui_when_background"
         private val _pendingImportUrl = MutableStateFlow<String?>(null)
         val pendingImportUrl: StateFlow<String?> = _pendingImportUrl.asStateFlow()
 
@@ -97,26 +102,21 @@ class MainActivity : FragmentActivity() {
             _pendingImportUrl.value = null
         }
 
-        private val _pendingDeepLink = MutableStateFlow<String?>(null)
-        val pendingDeepLink: StateFlow<String?> = _pendingDeepLink.asStateFlow()
+        private val _pendingDeepLink = MutableStateFlow<DeepLink?>(null)
+        val pendingDeepLink: StateFlow<DeepLink?> = _pendingDeepLink.asStateFlow()
 
-        fun clearPendingDeepLink() {
-            _pendingDeepLink.value = null
+        /** Consumes [link] only while it is still the pending one; a link that arrived since stays. */
+        fun clearPendingDeepLink(link: DeepLink) {
+            if (_pendingDeepLink.value === link) _pendingDeepLink.value = null
         }
     }
 
-    private val appSettingsStorage: com.github.yumeyucca.yumebox.data.store.AppSettingsStore by
-        inject()
     private val featureStore: FeatureStore by inject()
-    private val networkSettingsStorage:
-        com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore by
-        inject()
-    private val profilesRepository: com.github.yumeyucca.yumebox.runtime.client.ProfilesRepository by
-        inject()
-    private val proxyFacade: com.github.yumeyucca.yumebox.runtime.client.ProxyFacade by inject()
+    private val networkSettingsStorage: NetworkSettingsStore by inject()
+    private val profilesRepository: ProfilesRepository by inject()
+    private val proxyFacade: ProxyFacade by inject()
     private val serviceCache: MMKV by inject(qualifier = named("service_cache"))
-    private val applicationScope: CoroutineScope by
-        inject(qualifier = named(APPLICATION_SCOPE_NAME))
+    private val applicationScope: CoroutineScope by inject(qualifier = named(APPLICATION_SCOPE_NAME))
 
     private lateinit var intentController: IntentController
 
@@ -132,10 +132,14 @@ class MainActivity : FragmentActivity() {
         }
 
         super.onCreate(savedInstanceState)
-        applyExcludeFromRecents(appSettingsStorage.excludeFromRecents.value)
+        applyExcludeFromRecents(appSettingsStore.excludeFromRecents.value)
 
-        intentController = IntentController(this, lifecycleScope)
-        handleIntent(intent)
+        intentController = IntentController(lifecycleScope)
+        // The launch intent survives an Activity recreation, so handling it again after a rotation
+        // would re-deliver a link the user already acted on. A fresh create, on the other hand, is
+        // always a real delivery, and links that arrive while we are running come through
+        // [onNewIntent], which is the only other path that publishes one.
+        if (savedInstanceState == null) handleIntent(intent)
 
         val startupPermissionsRequested = requestStartupPermissions()
         if (!startupPermissionsRequested) {
@@ -146,93 +150,43 @@ class MainActivity : FragmentActivity() {
             WifiAutomationService.start(this)
         }
 
-        val showHomeGuideInitially =
-            savedInstanceState == null && !appSettingsStorage.homePreviewGuideShown.value
+        val showHomeGuideInitially = savedInstanceState == null && !appSettingsStore.homePreviewGuideShown.value
 
+        showAppContent(showHomeGuideInitially)
+
+        launchAutoStart()
+    }
+
+    private fun showAppContent(showHomeGuideInitially: Boolean) {
         setContent {
             val appSettingsViewModel = koinViewModel<AppSettingsViewModel>()
-            val themeMode =
-                appSettingsViewModel.themeMode.state
-                    .collectAsState()
-                    .value
-            val themeSeedColorArgb =
-                appSettingsViewModel.themeSeedColorArgb.state
-                    .collectAsState()
-                    .value
-            val invertOnPrimaryColors =
-                appSettingsViewModel.invertOnPrimaryColors.state
-                    .collectAsState()
-                    .value
-            val excludeFromRecents =
-                appSettingsViewModel.excludeFromRecents.state
-                    .collectAsState()
-                    .value
-            val topBarBlurEnabled =
-                appSettingsViewModel.topBarBlurEnabled.state
-                    .collectAsState()
-                    .value
-            val pageScale =
-                appSettingsViewModel.pageScale.state
-                    .collectAsState()
-                    .value
-            val useSystemWallpaper =
-                appSettingsViewModel.useSystemWallpaper.state
-                    .collectAsState()
-                    .value
-
-            LaunchedEffect(excludeFromRecents) {
-                this@MainActivity.applyExcludeFromRecents(excludeFromRecents)
-            }
-
-            ProvideAndroidPlatformTheme {
-                val systemDensity = LocalDensity.current
-                val scaledDensity =
-                    remember(systemDensity, pageScale) {
-                        Density(systemDensity.density * pageScale, systemDensity.fontScale)
-                    }
-                CompositionLocalProvider(LocalDensity provides scaledDensity) {
-                    YumeTheme(
-                        themeMode = themeMode,
-                        themeSeedColorArgb = themeSeedColorArgb,
-                        invertOnPrimaryColors = invertOnPrimaryColors,
-                    ) {
-                        val topBarHazeState = remember { HazeState() }
-                        val topBarBackground = MiuixTheme.colorScheme.surface
-                        val topBarHazeStyle = YumeHaze.topBarStyle(topBarBackground)
-                        CompositionLocalProvider(
-                            LocalTopBarHazeState provides
-                                if (topBarBlurEnabled) topBarHazeState else null,
-                            LocalTopBarHazeStyle provides
-                                if (topBarBlurEnabled) topBarHazeStyle else null,
-                        ) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MiuixTheme.colorScheme.surface,
-                            ) {
-                                AppNavContainer(navigationComponent)
-                                ToastDialogHost()
-                                NodeSourceEmptyHint() // KimiNoBox
-
-                                var showHomeGuide by remember {
-                                    mutableStateOf(showHomeGuideInitially)
-                                }
-                                HomePreviewGuideDialog(
-                                    show = showHomeGuide,
-                                    useSystemWallpaper = useSystemWallpaper,
-                                    onUseSystemWallpaperChange =
-                                        appSettingsViewModel::onUseSystemWallpaperChange,
-                                    onDismissRequest = {
-                                        showHomeGuide = false
-                                        appSettingsStorage.homePreviewGuideShown.set(true)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            MainActivityContent(
+                appSettingsViewModel = appSettingsViewModel,
+                showHomeGuideInitially = showHomeGuideInitially,
+                onExcludeFromRecentsChange = ::applyExcludeFromRecents,
+                onHomePreviewGuideShown = { appSettingsStore.homePreviewGuideShown.set(true) },
+                navigationComponent = navigationComponent,
+            )
         }
+    }
 
+    /**
+     * Starts the proxy if auto start is due, after the startup warm-up gate opens.
+     *
+     * [applicationScope] outlives this Activity, so nothing here may read instance members that point at it — the
+     * dependencies are resolved into [AutoStartDependencies] first and only the application context is captured.
+     */
+    private fun launchAutoStart() {
+        val autoStartDependencies =
+            AutoStartDependencies(
+                featureStore = featureStore,
+                proxyFacade = proxyFacade,
+                profilesRepository = profilesRepository,
+                appSettingsStorage = appSettingsStore,
+                networkSettingsStorage = networkSettingsStorage,
+                serviceCache = serviceCache,
+            )
+        val autoStartContext = appContextOrSelf
         applicationScope.launch {
             if (!AutoStartSessionGate.tryBeginAutoActions()) {
                 return@launch
@@ -240,19 +194,12 @@ class MainActivity : FragmentActivity() {
             var handled = false
             try {
                 StartupTaskCoordinator.awaitWarmup()
-                with(
-                    AutoStartDependencies(
-                        featureStore = featureStore,
-                        proxyFacade = proxyFacade,
-                        profilesRepository = profilesRepository,
-                        appSettingsStorage = appSettingsStorage,
-                        networkSettingsStorage = networkSettingsStorage,
-                        serviceCache = serviceCache,
-                    ),
-                ) {
-                    ProxyAutoStartHelper.checkAndAutoStart(this@MainActivity)
-                }
+                with(autoStartDependencies) { ProxyAutoStartHelper.checkAndAutoStart(autoStartContext) }
                 handled = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Timber.e(error, "Auto-start after warm-up failed")
             } finally {
                 AutoStartSessionGate.finishAutoActions(markHandled = handled)
             }
@@ -261,6 +208,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Keep [getIntent] naming the newest link so a later recreation reads the same target.
+        setIntent(intent)
         handleIntent(intent)
     }
 
@@ -290,14 +239,10 @@ class MainActivity : FragmentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val safeIntent = intent ?: return
-        if (safeIntent.getBooleanExtra(EXTRA_EXIT_UI_WHEN_BACKGROUND, false)) {
-            finishAndRemoveTask()
-            return
-        }
         safeIntent.data?.let { handleDeepLinkUri(it) }
         // KimiNoBox: long-pressing the quick-settings tile opens the home page
         if (safeIntent.action == TileService.ACTION_QS_TILE_PREFERENCES) {
-            _pendingDeepLink.value = Components.HOME_DEEP_LINK
+            handleDeepLinkUri(Uri.parse(Components.HOME_DEEP_LINK))
         }
 
         intentController.handleIntent(safeIntent)
@@ -306,8 +251,7 @@ class MainActivity : FragmentActivity() {
     private fun handleDeepLinkUri(uri: Uri) {
         when (uri.scheme) {
             "clash",
-            "clashmeta",
-            -> {
+            "clashmeta" -> {
                 if (uri.host != "install-config") return
                 val configUrl = uri.getQueryParameter("url")
                 if (!configUrl.isNullOrBlank()) {
@@ -316,23 +260,21 @@ class MainActivity : FragmentActivity() {
             }
 
             "yumebox" -> {
-                _pendingDeepLink.value = uri.toString()
+                deepLinkOf(uri)?.let { _pendingDeepLink.value = it }
             }
         }
     }
 
     /** Requests only the notification permission that is relevant during application startup. */
     private fun requestStartupPermissions(): Boolean {
-        val permissions =
-            buildList {
-                if (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-                    android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) {
-                    add(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
+        val permissions = buildList {
+            if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
         if (permissions.isNotEmpty()) {
             requestPermissions(permissions.toTypedArray(), REQUEST_STARTUP_PERMISSIONS)
         }
@@ -343,17 +285,14 @@ class MainActivity : FragmentActivity() {
         if (systemWallpaperPermissionRequestHandled) return
         systemWallpaperPermissionRequestHandled = true
         if (!appSettingsStore.useSystemWallpaper.value) return
-        if (SystemWallpaperAccess.isGranted(this)) {
-            appSettingsStore.systemWallpaperPermissionRequested.set(true)
-            return
-        }
-
         appSettingsStore.systemWallpaperPermissionRequested.set(true)
+        if (SystemWallpaperAccess.isGranted(this)) return
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            startActivity(SystemWallpaperAccess.settingsIntent(this))
+            startActivitySafely(SystemWallpaperAccess.settingsIntent(this))
         } else {
             requestPermissions(
-                arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
                 REQUEST_SYSTEM_WALLPAPER_PERMISSION,
             )
         }
@@ -374,6 +313,52 @@ class MainActivity : FragmentActivity() {
                     }
                 }
             task?.setExcludeFromRecents(exclude)
+        }
+    }
+}
+
+/**
+ * The Activity's whole UI tree: theme shell, density scaling and the one dialog that outlives navigation. Kept out of
+ * `onCreate` so the Activity method stays a lifecycle body.
+ */
+@Composable
+private fun MainActivityContent(
+    appSettingsViewModel: AppSettingsViewModel,
+    showHomeGuideInitially: Boolean,
+    onExcludeFromRecentsChange: (Boolean) -> Unit,
+    onHomePreviewGuideShown: () -> Unit,
+    navigationComponent: AppNavigationComponent,
+) {
+    val excludeFromRecents by appSettingsViewModel.excludeFromRecents.state.collectAsState()
+    val pageScale by appSettingsViewModel.pageScale.state.collectAsState()
+    val useSystemWallpaper by appSettingsViewModel.useSystemWallpaper.state.collectAsState()
+
+    LaunchedEffect(excludeFromRecents) { onExcludeFromRecentsChange(excludeFromRecents) }
+
+    YumeAppShell {
+        val systemDensity = LocalDensity.current
+        val scaledDensity =
+            remember(systemDensity, pageScale) { Density(systemDensity.density * pageScale, systemDensity.fontScale) }
+        CompositionLocalProvider(LocalDensity provides scaledDensity) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MiuixTheme.colorScheme.surface,
+            ) {
+                AppNavContainer(navigationComponent)
+                ToastDialogHost() // KimiNoBox
+                NodeSourceEmptyHint() // KimiNoBox
+
+                var showHomeGuide by remember { mutableStateOf(showHomeGuideInitially) }
+                HomePreviewGuideDialog(
+                    show = showHomeGuide,
+                    useSystemWallpaper = useSystemWallpaper,
+                    onUseSystemWallpaperChange = appSettingsViewModel::onUseSystemWallpaperChange,
+                    onDismissRequest = {
+                        showHomeGuide = false
+                        onHomePreviewGuideShown()
+                    },
+                )
+            }
         }
     }
 }

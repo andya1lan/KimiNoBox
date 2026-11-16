@@ -28,25 +28,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import com.github.yumeyucca.yumebox.common.util.toast
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.presentation.util.isYamlConfigFileName
 import com.github.yumeyucca.yumebox.presentation.util.readDisplayName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import timber.log.Timber
 
-internal data class ProfileImportLaunchers(
-    val pickFile: () -> Unit,
-    val selectQrImage: () -> Unit,
-)
-
+/** Picks a local YAML config file; the add sheet and the 编辑配置 page both use it. */
 @Composable
-internal fun rememberProfileImportLaunchers(
+internal fun rememberProfileConfigFilePicker(
     context: Context,
     onFileSelected: (Uri, String) -> Unit,
     onUnsupportedFile: () -> Unit,
-    onQrDecoded: (String) -> Unit,
-): ProfileImportLaunchers {
-    val scope = rememberCoroutineScope()
+): () -> Unit {
     val file =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri ?: return@rememberLauncherForActivityResult
@@ -60,12 +55,19 @@ internal fun rememberProfileImportLaunchers(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
-            }
-                .onFailure { error ->
-                    Timber.w(error, "Persist profile source permission failed: %s", uri)
-                }
+            }.onFailure { error -> Timber.w(error, "Persist profile source permission failed: %s", uri) }
             onFileSelected(uri, fileName)
         }
+    return { file.launch(arrayOf("*/*")) }
+}
+
+/** Picks a QR image and decodes its payload off the main thread. */
+@Composable
+internal fun rememberQrImagePicker(
+    context: Context,
+    onQrDecoded: (String) -> Unit,
+): () -> Unit {
+    val scope = rememberCoroutineScope()
     val qrImage =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri ?: return@rememberLauncherForActivityResult
@@ -80,14 +82,13 @@ internal fun rememberProfileImportLaunchers(
                         context.toast(YumeTxt.ProfilesPage.QrScanner.RecognizeSuccess)
                     }
                 } catch (error: Exception) {
+                    if (error is CancellationException) throw error
                     context.toast(
-                        YumeTxt.ProfilesPage.QrScanner.RecognizeError.format(error.message ?: "")
+                        YumeTxt.ProfilesPage.QrScanner.RecognizeError
+                            .format(error.message ?: ""),
                     )
                 }
             }
         }
-    return ProfileImportLaunchers(
-        pickFile = { file.launch(arrayOf("*/*")) },
-        selectQrImage = { qrImage.launch("image/*") },
-    )
+    return { qrImage.launch("image/*") }
 }

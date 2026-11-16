@@ -22,132 +22,19 @@
 
 package com.github.yumeyucca.yumebox.screen.profiles
 
-
-import android.content.Context
 import android.content.Intent
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.github.yumeyucca.yumebox.App
+import com.github.yumeyucca.yumebox.common.util.startActivitySafely
 import com.github.yumeyucca.yumebox.common.util.toast
-import com.github.yumeyucca.yumebox.feature.editor.language.LanguageScope
-import com.github.yumeyucca.yumebox.presentation.component.LocalNavigator
-import com.github.yumeyucca.yumebox.presentation.navigation.Route
-import com.github.yumeyucca.yumebox.presentation.util.OverrideEditorStore
-import com.github.yumeyucca.yumebox.runtime.api.Profile
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
+import com.github.yumeyucca.yumebox.runtime.api.Profile
 
-@Composable
-internal fun ProfileShareDialog(
-    profile: Profile?,
-    show: Boolean,
-    onDismiss: () -> Unit,
-    onDismissFinished: () -> Unit,
-) {
-    val profileToShare = profile ?: return
-    val context = LocalContext.current
-
-    ShareOptionsDialog(
-        show = show,
-        profile = profileToShare,
-        onDismiss = onDismiss,
-        onDismissFinished = onDismissFinished,
-        onShareFile = {
-            shareProfileFile(context, profileToShare)
-            onDismiss()
-        },
-        onShareLink = {
-            shareProfileLink(profileToShare)
-            onDismiss()
-        },
-    )
-}
-
-@Composable
-internal fun ProfileEditOptionsDialogHost(
-    profile: Profile?,
-    show: Boolean,
-    onDismiss: () -> Unit,
-    onDismissFinished: () -> Unit,
-    onSettingsRequested: (Profile) -> Unit,
-) {
-    val profileToEdit = profile ?: return
-    val context = LocalContext.current
-    val navigator = LocalNavigator.current
-    var openPreviewOnDismiss by remember(profileToEdit.uuid) { mutableStateOf(false) }
-    var openViewOnDismiss by remember(profileToEdit.uuid) { mutableStateOf(false) } // KimiNoBox
-
-    ProfileEditOptionsDialog(
-        show = show,
-        onOpenConfig = {
-            openPreviewOnDismiss = false
-            onDismiss()
-            val configFile = importedConfigFile(profileToEdit)
-            openProfileConfigPreview(
-                targetFile = configFile,
-                missingMessage =
-                    YumeTxt.ProfilesPage.SettingsDialog.ConfigMissing.format(
-                        configFile.absolutePath
-                    ),
-                editable = true,
-                onReadFailed = context::toast,
-            ) { content, callback ->
-                OverrideEditorStore.setupConfigPreview(
-                    title = profileToEdit.name,
-                    content = content,
-                    language = LanguageScope.Yaml,
-                    callback = callback,
-                )
-                openPreviewOnDismiss = true
-            }
-        },
-        // KimiNoBox: 「查看配置」 opens once the dialog is gone, like the editor preview
-        onViewConfig = {
-            openPreviewOnDismiss = false
-            openViewOnDismiss = true
-            onDismiss()
-        },
-        onEditSettings = {
-            openPreviewOnDismiss = false
-            onDismiss()
-            onSettingsRequested(profileToEdit)
-        },
-        onDismiss = {
-            openPreviewOnDismiss = false
-            onDismiss()
-        },
-        // KimiNoBox
-        extraActions = {
-            ProfileVersionActions(profileToEdit) {
-                openPreviewOnDismiss = false
-                onDismiss()
-            }
-        },
-        onDismissFinished = {
-            onDismissFinished()
-            // KimiNoBox: pushed over the profiles page, which reopens this dialog on return
-            if (openViewOnDismiss) {
-                openViewOnDismiss = false
-                ProfileEditReturn.request(profileToEdit)
-                navigator.push(
-                    Route.ProfileConfigView(profileToEdit.uuid.toString(), profileToEdit.name)
-                )
-            }
-            if (openPreviewOnDismiss) {
-                openPreviewOnDismiss = false
-                ProfileEditReturn.request(profileToEdit)
-                navigator.push(Route.OverrideConfigPreview)
-            }
-        },
-    )
-}
-
-private fun shareProfileFile(context: Context, profile: Profile) {
+internal fun shareProfileFile(profile: Profile) {
+    val context = App.instance
     val file = importedConfigFile(profile)
     if (!file.exists()) {
-        context.toast(
-            YumeTxt.ProfilesPage.ShareDialog.ImportedConfigMissing.format(file.absolutePath)
-        )
+        context.toast(YumeTxt.ProfilesPage.ShareDialog.ImportedConfigMissing.format(file.absolutePath))
         return
     }
 
@@ -174,9 +61,9 @@ private fun shareProfileFile(context: Context, profile: Profile) {
         .onFailure { error -> context.toast(error.message ?: "Share failed") }
 }
 
-private fun shareProfileLink(profile: Profile) {
+internal fun shareProfileLink(profile: Profile) {
     val context = App.instance
-    val url = profile.source.takeIf { profile.type == Profile.Type.Url }
+    val url = profile.source.takeIf { profile.type == Profile.Type.Url && it.isNotBlank() }
     if (url == null) {
         context.toast(YumeTxt.ProfilesPage.ShareDialog.NoLink)
         return
@@ -188,7 +75,7 @@ private fun shareProfileLink(profile: Profile) {
             putExtra(Intent.EXTRA_TEXT, url)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-    context.startActivity(
+    context.startActivitySafely(
         Intent.createChooser(shareIntent, YumeTxt.ProfilesPage.ShareDialog.ShareLink).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

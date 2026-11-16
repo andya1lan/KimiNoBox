@@ -27,6 +27,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.core.util.AutoStartSessionGate
 import com.github.yumeyucca.yumebox.data.store.MMKVProvider
 import com.github.yumeyucca.yumebox.data.store.NetworkSettingsStore
@@ -45,15 +46,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import timber.log.Timber
 
 @SuppressLint("NewApi")
 class ProxyTileService : TileService() {
     private val profileManager by lazy { ProfileService(applicationContext) }
-    private val networkSettingsStorage by lazy {
-        NetworkSettingsStore(MMKVProvider().getMMKV("network_settings"))
-    }
+    private val networkSettingsStorage by lazy { NetworkSettingsStore(MMKVProvider().getMMKV("network_settings")) }
     private val tileLabelText: String by lazy {
         applicationInfo.loadLabel(packageManager).toString().ifBlank { "KimiNoBox" } // KimiNoBox
     }
@@ -81,12 +79,16 @@ class ProxyTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val state = RuntimeCoordinator.state.value
-        // A second tap while a start is still coming up cancels it.
+        // A second tap while a start is still coming up supersedes it; any other in-flight toggle
+        // absorbs the tap. The superseded job is cancelled so the two cannot interleave.
         if (toggleJob?.isActive == true && state.phase != RuntimePhase.Starting) return
+        toggleJob?.cancel()
 
         toggleJob = scope.launch {
             if (RemoteControllerStore.isActive()) {
-                showTile(active = true, YumeTxt.Service.Tile.ClickToStopProxy)
+                // The remote controller owns the runtime, so this tile has nothing it can stop.
+                // Flipping the label to "click to stop" promised an action nothing performed.
+                Timber.i("Tile tap ignored: the remote controller owns the runtime")
                 return@launch
             }
             try {
@@ -150,16 +152,12 @@ class ProxyTileService : TileService() {
 
     private fun startActivityAndCollapseCompat(intent: Intent, requestCode: Int) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val pendingIntentFlags =
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            val pendingIntent =
-                PendingIntent.getActivity(this, requestCode, intent, pendingIntentFlags)
+            val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val pendingIntent = PendingIntent.getActivity(this, requestCode, intent, pendingIntentFlags)
             startActivityAndCollapse(pendingIntent)
             return
         }
 
-        @Suppress("DEPRECATION")
-        @SuppressLint("StartActivityAndCollapseDeprecated")
-        startActivityAndCollapse(intent)
+        @Suppress("DEPRECATION") @SuppressLint("StartActivityAndCollapseDeprecated") startActivityAndCollapse(intent)
     }
 }

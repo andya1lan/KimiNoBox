@@ -23,8 +23,7 @@ package com.github.yumeyucca.yumebox.runtime.service.controller
 import com.github.yumeyucca.yumebox.core.model.TunnelState
 import kotlinx.serialization.Serializable
 
-@Serializable
-internal data class RawProvidersResponse(val providers: Map<String, RawProvider> = emptyMap())
+@Serializable internal data class RawProvidersResponse(val providers: Map<String, RawProvider> = emptyMap())
 
 @Serializable
 internal data class RawProvider(
@@ -44,11 +43,9 @@ internal data class RawSubscriptionInfo(
     @kotlinx.serialization.SerialName("Expire") val expire: Long = 0L,
 )
 
-@Serializable
-internal data class RawProxiesResponse(val proxies: Map<String, RawProxy> = emptyMap())
+@Serializable internal data class RawProxiesResponse(val proxies: Map<String, RawProxy> = emptyMap())
 
-@Serializable
-internal data class RawGroupResponse(val proxies: List<RawProxy> = emptyList())
+@Serializable internal data class RawGroupResponse(val proxies: List<RawProxy> = emptyList())
 
 @Serializable
 internal data class RawProxy(
@@ -62,14 +59,11 @@ internal data class RawProxy(
     val udp: Boolean = false,
 )
 
-@Serializable
-internal data class RawDelay(val delay: Int = 0)
+@Serializable internal data class RawDelay(val delay: Int = 0)
 
-@Serializable
-internal data class RawDelayResult(val delay: Int = 0)
+@Serializable internal data class RawDelayResult(val delay: Int = 0)
 
-@Serializable
-internal data class RawConfigs(val mode: TunnelState.Mode = TunnelState.Mode.Rule)
+@Serializable internal data class RawConfigs(val mode: TunnelState.Mode = TunnelState.Mode.Rule)
 
 @Serializable
 internal data class RawTraffic(
@@ -79,11 +73,9 @@ internal data class RawTraffic(
     val downTotal: Long = 0,
 )
 
-@Serializable
-internal data class SelectBody(val name: String)
+@Serializable internal data class SelectBody(val name: String)
 
-@Serializable
-internal data class RawRulesResponse(val rules: List<RawRule> = emptyList())
+@Serializable internal data class RawRulesResponse(val rules: List<RawRule> = emptyList())
 
 @Serializable
 internal data class RawRule(

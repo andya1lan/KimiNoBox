@@ -25,9 +25,8 @@ import kotlinx.serialization.Serializable
 /**
  * A saved external mihomo controller backend (RESTful API endpoint).
  *
- * When external-controller mode is active, the app steers this backend via its REST API instead of
- * running a local core. [secret] is sent as a `Authorization: Bearer <secret>` header (blank = no
- * auth configured).
+ * When external-controller mode is active, the app steers this backend via its REST API instead of running a local
+ * core. [secret] is sent as a `Authorization: Bearer <secret>` header (blank = no auth configured).
  */
 @Serializable
 enum class RemoteProtocol(
@@ -53,6 +52,10 @@ data class RemoteBackend(
     /** Base URL with any trailing slash stripped so paths can be appended directly. */
     val normalizedBaseUrl: String
         get() = baseUrl.trimEnd('/')
+
+    /** Human-facing label: the user's own name, or `host:port` when they never gave one. */
+    val displayName: String
+        get() = name.ifBlank { "$host:$port" }
 
     companion object {
         fun newId(): String =

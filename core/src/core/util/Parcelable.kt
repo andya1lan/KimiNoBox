@@ -71,7 +71,6 @@ fun <T : Parcelable> List<T>.writeToParcelSlice(parcel: Parcel, flags: Int) {
 
 fun <T : Parcelable> Parcelable.Creator<T>.createListFromParcelSlice(
     parcel: Parcel,
-    @Suppress("UNUSED_PARAMETER") flags: Int,
     chunk: Int,
 ): List<T> {
     val total = parcel.readInt()
@@ -103,9 +102,7 @@ fun <T : Parcelable> Parcelable.Creator<T>.createListFromParcelSlice(
             }
 
             val size = reply.readInt()
-            check(size in 1..requested) {
-                "Invalid parcel slice size $size at offset $offset (requested $requested)"
-            }
+            check(size in 1..requested) { "Invalid parcel slice size $size at offset $offset (requested $requested)" }
 
             repeat(size) { result.add(createFromParcel(reply)) }
             offset += size
@@ -115,8 +112,6 @@ fun <T : Parcelable> Parcelable.Creator<T>.createListFromParcelSlice(
         }
     }
 
-    check(result.size == total) {
-        "Parcel slice truncated: expected $total items, received ${result.size}"
-    }
+    check(result.size == total) { "Parcel slice truncated: expected $total items, received ${result.size}" }
     return result
 }
