@@ -21,16 +21,12 @@
 package com.github.yumeyucca.yumebox.runtime.service.notification
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.SystemClock
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -88,7 +84,6 @@ class ServiceNotificationManager(
     private var islandShown = false
     private var bypassAcquired = false
     private var lastFrame: NoticeFrame? = null
-    private val notificationTime = System.currentTimeMillis()
 
     fun createChannel() {
         legacyChannelIds.forEach(notificationManager::deleteNotificationChannel)
@@ -107,13 +102,10 @@ class ServiceNotificationManager(
     // stay free of MMKV/DAO reads. The enriched content follows via the updater.
     fun createInitialNotification(): Notification =
         buildNotification(
-            presentation =
-                NotificationPresentationFactory.createStatus(
-                    profileName = service.applicationInfo.loadLabel(service.packageManager).toString(),
-                    status = YumeTxt.Service.Notification.Running,
-                ),
-            // Do not promote the startup placeholder before real traffic values are available.
-            promoteLiveUpdate = false,
+            NotificationPresentationFactory.createStatus(
+                profileName = service.applicationInfo.loadLabel(service.packageManager).toString(),
+                status = YumeTxt.Service.Notification.Running,
+            )
         )
 
     /**
@@ -121,8 +113,8 @@ class ServiceNotificationManager(
      * transitions (start, profile switch) and never polls. The old 1 s ticker cost a profile read
      * and core IPC every second, and re-posted every ~2 s because the island-only speed field
      * kept changing. Only the HyperOS Super Island still ticks, since it shows the live speed, so
-     * the notification display lines apply to the island; the plain one keeps the Live Updates
-     * switch. The mode is chosen once per service start.
+     * the notification display lines apply to the island. The plain one is only there to keep the
+     * service alive: no Live Updates promotion. The mode is chosen once per service start.
      */
     fun startUpdates(scope: CoroutineScope): Job =
         scope.launch(Dispatchers.IO) {
@@ -152,10 +144,7 @@ class ServiceNotificationManager(
     }
 
     private sealed interface NoticeFrame {
-        data class Plain(
-            val presentation: NotificationPresentation,
-            val promoteLiveUpdate: Boolean,
-        ) : NoticeFrame
+        data class Plain(val presentation: NotificationPresentation) : NoticeFrame
 
         data class Island(val running: NotificationPresentation.Running) : NoticeFrame
     }
@@ -169,19 +158,11 @@ class ServiceNotificationManager(
                 NotificationPresentationFactory.createStatus(
                     profileName = profileName,
                     status = YumeTxt.Service.Notification.Running,
-                ),
-                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
+                )
             )
         }
         val running = loadRunning(profile, profileName)
-        return if (isIslandEnabled()) {
-            NoticeFrame.Island(running)
-        } else {
-            NoticeFrame.Plain(
-                running,
-                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
-            )
-        }
+        return if (isIslandEnabled()) NoticeFrame.Island(running) else NoticeFrame.Plain(running)
     }
 
     private suspend fun loadRunning(
@@ -223,8 +204,7 @@ class ServiceNotificationManager(
                 NotificationPresentationFactory.createStatus(
                     profileName = profileName,
                     status = YumeTxt.Service.Notification.Running,
-                ),
-                promoteLiveUpdate = appSettings.liveUpdatesEnabled.value,
+                )
             )
         )
     }
@@ -260,7 +240,7 @@ class ServiceNotificationManager(
     private suspend fun postPlain(frame: NoticeFrame.Plain) {
         if (releaseBypass()) islandShown = false
         if (frame == lastFrame) return
-        deliver(buildNotification(frame.presentation, frame.promoteLiveUpdate))
+        deliver(buildNotification(frame.presentation))
         lastFrame = frame
     }
 
@@ -282,8 +262,7 @@ class ServiceNotificationManager(
         running: NotificationPresentation.Running,
         promote: Boolean,
     ): Notification {
-        // The island and native live-update card would duplicate each other on HyperOS.
-        val notification = buildNotification(running, promoteLiveUpdate = false)
+        val notification = buildNotification(running)
         HyperOsIsland.applyExtras(service, notification, running, smallIconRes(), promote)
         return notification
     }
@@ -296,10 +275,7 @@ class ServiceNotificationManager(
         }
     }
 
-    private fun buildNotification(
-        presentation: NotificationPresentation,
-        promoteLiveUpdate: Boolean,
-    ): Notification {
+    private fun buildNotification(presentation: NotificationPresentation): Notification {
         val contentIntent =
             PendingIntent.getActivity(
                 service,
@@ -317,55 +293,28 @@ class ServiceNotificationManager(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        val builder =
-            NotificationCompat.Builder(service, config.channelId)
-                .setContentTitle(presentation.title)
-                .setContentText(presentation.content)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(presentation.expandedText))
-                .setSmallIcon(smallIconRes())
-                // Keep the expanded header's small icon white.
-                .setColor(Color.WHITE)
-                .setContentIntent(contentIntent)
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .setWhen(notificationTime)
-                .setCategory(Notification.CATEGORY_SERVICE)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-
-        val liveUpdate =
-            promoteLiveUpdate &&
-                NativeLiveNotification.apply(
-                    builder = builder,
-                    manager = service.getSystemService(NotificationManager::class.java),
-                    criticalText = presentation.criticalText,
-                )
-        if (liveUpdate) {
-            // Text-only action for the live-update card.
-            builder.addAction(
-                0,
-                whiteActionLabel(YumeTxt.Service.Notification.SelectNode),
-                contentIntent,
-            )
-        }
-        // Promoted cards hide the timestamp; standard notifications keep it.
-        builder.setShowWhen(!liveUpdate)
-        return builder.build()
+        // KimiNoBox: a plain keep-alive notification (profile name and 运行中), without the Live
+        // Updates promotion or a timestamp
+        return NotificationCompat.Builder(service, config.channelId)
+            .setContentTitle(presentation.title)
+            .setContentText(presentation.content)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(presentation.expandedText))
+            .setSmallIcon(smallIconRes())
+            // Keep the expanded header's small icon white.
+            .setColor(Color.WHITE)
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
     }
 
     // startForeground() must never trip before the first frame, so a preference read failure falls
     // back to the default logo.
     private fun smallIconRes(): Int = runCatching { ServiceLogoIcons.resId() }.getOrDefault(R.drawable.ic_logo_service)
-
-    private fun whiteActionLabel(text: String): CharSequence =
-        SpannableString(text).apply {
-            setSpan(
-                ForegroundColorSpan(Color.WHITE),
-                0,
-                length,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-            )
-        }
 
     private fun resolveProfile(): Imported? = serviceStore.activeProfile?.let { ImportedDao.queryByUUID(it) }
 

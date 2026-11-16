@@ -66,7 +66,6 @@ class AppSettingsViewModel(
     val autoUpdateCurrentProfileOnStart: Preference<Boolean> = settings.autoUpdateCurrentProfileOnStart
     val excludeFromRecents: Preference<Boolean> = settings.excludeFromRecents
     val showTrafficNotification: Preference<Boolean> = settings.showTrafficNotification
-    val liveUpdatesEnabled: Preference<Boolean> = settings.liveUpdatesEnabled
     val notificationFirstLine: Preference<NotificationLineContent> = settings.notificationFirstLine
     val notificationSecondLine: Preference<NotificationLineContent> = settings.notificationSecondLine
     val notificationFirstLineText: Preference<String> = settings.notificationFirstLineText
@@ -413,7 +412,6 @@ class AppSettingsViewModel(
 
     fun onShowTrafficNotificationChange(show: Boolean) = showTrafficNotification.set(show)
 
-    fun onLiveUpdatesEnabledChange(enabled: Boolean) = liveUpdatesEnabled.set(enabled)
 
     fun onNotificationFirstLineChange(content: NotificationLineContent) = notificationFirstLine.set(content)
 

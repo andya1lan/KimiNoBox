@@ -46,6 +46,7 @@ import com.github.yumeyucca.yumebox.presentation.component.*
 import com.github.yumeyucca.yumebox.presentation.navigation.Route
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
 import com.github.yumeyucca.yumebox.presentation.theme.label
+import com.github.yumeyucca.yumebox.runtime.service.notification.HyperOsIsland
 import com.github.yumeyucca.yumebox.screen.settings.component.ThemeColorPickerItem
 import com.github.yumeyucca.yumebox.update.AppUpdateChannel
 import org.koin.androidx.compose.koinViewModel
@@ -65,10 +66,13 @@ fun AppSettingsScreen(navigator: Navigator) {
             item { AppBehaviorSettingsSection(viewModel) }
             item { AppThemeModeSettingsSection(viewModel) }
             item { AppThemeColorSettingsSection(viewModel) }
-            item {
-                AppNotificationSettingsSection(
-                    onOpenNotificationSettings = { navigator.push(Route.NotificationSettings) },
-                )
+            // KimiNoBox: only the HyperOS island has notification settings; the plain notification is fixed
+            if (HyperOsIsland.isSupported()) {
+                item {
+                    AppNotificationSettingsSection(
+                        onOpenNotificationSettings = { navigator.push(Route.NotificationSettings) },
+                    )
+                }
             }
             item { AppInterfaceSettingsSection(viewModel) }
             item { AppNavigationSettingsSection(viewModel) }

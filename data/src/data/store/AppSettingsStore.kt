@@ -39,7 +39,6 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val excludeFromRecents by boolFlow(false)
     val showTrafficNotification by boolFlow(true)
     // Read by the foreground service through the same multi-process "settings" store.
-    val liveUpdatesEnabled by boolFlow(true)
     val notificationFirstLine by enumFlow(NotificationLineContent.ProfileName)
     val notificationSecondLine by enumFlow(NotificationLineContent.LiveTraffic)
     val notificationFirstLineText by strFlow("")

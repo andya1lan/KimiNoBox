@@ -22,13 +22,7 @@
 
 package com.github.yumeyucca.yumebox.screen.settings
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import android.text.format.DateFormat
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -55,7 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.github.yumeyucca.yumebox.common.util.ByteFormatter
-import com.github.yumeyucca.yumebox.common.util.LiveUpdateSupport
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
 import com.github.yumeyucca.yumebox.data.model.NotificationDisplaySettings
 import com.github.yumeyucca.yumebox.data.model.NotificationLineContent
@@ -134,7 +127,6 @@ private fun NotificationSettingsContent(
     homeViewModel: HomeViewModel,
 ) {
     val showTraffic by viewModel.showTrafficNotification.state.collectAsState()
-    val liveUpdatesEnabled by viewModel.liveUpdatesEnabled.state.collectAsState()
     val firstLine by viewModel.notificationFirstLine.state.collectAsState()
     val secondLine by viewModel.notificationSecondLine.state.collectAsState()
     val firstLineText by viewModel.notificationFirstLineText.state.collectAsState()
@@ -163,7 +155,8 @@ private fun NotificationSettingsContent(
         scaffoldPadding = scaffoldPadding,
     ) {
         // KimiNoBox: the plain notification is static (ServiceNotificationManager.startUpdates), so
-        // the display lines and their preview only reach the HyperOS Super Island
+        // the display lines and their preview only reach the HyperOS Super Island; without it the
+        // settings entry is hidden (AppSettingsScreen)
         if (shizukuAccess.islandSupported) {
             item {
                 NotificationPreviewSection(
@@ -183,14 +176,6 @@ private fun NotificationSettingsContent(
                     viewModel = viewModel,
                     superIslandEnabled = superIslandEnabled,
                     shizukuAccess = shizukuAccess,
-                )
-            }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            item {
-                NotificationLiveUpdatesSection(
-                    liveUpdatesEnabled = liveUpdatesEnabled,
-                    onLiveUpdatesEnabledChange = viewModel::onLiveUpdatesEnabledChange,
                 )
             }
         }
@@ -277,64 +262,6 @@ private fun NotificationContentSection(
 }
 
 /** Android 16+ live-update opt-in; the system owns the actual toggle. */
-@RequiresApi(Build.VERSION_CODES.BAKLAVA)
-@Composable
-private fun NotificationLiveUpdatesSection(
-    liveUpdatesEnabled: Boolean,
-    onLiveUpdatesEnabledChange: (Boolean) -> Unit,
-) {
-    val context = LocalContext.current
-    var promotionAllowed by remember { mutableStateOf(false) }
-
-    LifecycleResumeEffect(Unit) {
-        promotionAllowed = LiveUpdateSupport.isPromotionAllowed(context)
-        onPauseOrDispose {}
-    }
-
-    Title(YumeTxt.AppSettings.Notification.LiveUpdatesSection)
-    AppCard {
-        PreferenceSwitchItem(
-            title = YumeTxt.AppSettings.Notification.LiveUpdatesAppTitle,
-            checked = liveUpdatesEnabled,
-            onCheckedChange = onLiveUpdatesEnabledChange,
-        )
-        PreferenceArrowItem(
-            title = YumeTxt.AppSettings.Notification.LiveUpdatesTitle,
-            endActions = {
-                Text(
-                    text =
-                        if (promotionAllowed) {
-                            YumeTxt.AppSettings.Notification.LiveUpdatesEnabled
-                        } else {
-                            YumeTxt.AppSettings.Notification.LiveUpdatesDisabled
-                        },
-                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                )
-            },
-            onClick = { openLiveUpdatesSettings(context) },
-        )
-    }
-    SectionSummary(YumeTxt.AppSettings.Notification.LiveUpdatesSummary)
-}
-
-@RequiresApi(Build.VERSION_CODES.BAKLAVA)
-private fun openLiveUpdatesSettings(context: Context) {
-    val intent =
-        Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
-            .setData(Uri.parse("package:${context.packageName}"))
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    val opened = runCatching { context.startActivity(intent) }.isSuccess
-    if (opened) return
-    runCatching {
-        context.startActivity(
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-}
-
 /** HyperOS-only section: Super Island switch and the Shizuku access row. */
 @Composable
 private fun NotificationHyperOsSection(
