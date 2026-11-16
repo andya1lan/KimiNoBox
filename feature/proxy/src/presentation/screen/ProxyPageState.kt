@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
@@ -34,10 +35,13 @@ import androidx.compose.runtime.collectAsState // KimiNoBox
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.unit.Dp
 import com.github.yumeyucca.yumebox.core.locale.YumeTxt
@@ -49,6 +53,7 @@ import com.github.yumeyucca.yumebox.presentation.util.rememberSavedGridState
 import com.github.yumeyucca.yumebox.presentation.util.rememberSavedListState
 import com.github.yumeyucca.yumebox.presentation.viewmodel.ProxyViewModel
 import com.github.yumeyucca.yumebox.runtime.client.ProxyGroupSyncSource
+import kotlinx.coroutines.launch
 
 /**
  * 代理页的全部非渲染状态。
@@ -69,6 +74,10 @@ internal class ProxyPageState(
     private val proxyViewModel: ProxyViewModel,
     private val selectionController: SelectedGroupController,
     private val nodeSearchVisible: Boolean,
+    private val proxyGroups: List<ProxyGroupInfo>, // KimiNoBox: every group, for openGroup
+    private val strategyGroupNames: Set<String>, // KimiNoBox: the category tab an opened group sits under
+    private val openedGroups: SnapshotStateList<OpenedGroup>,
+    private val poppedBackState: MutableState<Boolean>,
     val proxyListTabs: List<String>,
     val displayedProxyGroups: List<ProxyGroupInfo>,
     val visibleProxyGroups: List<ProxyGroupInfo>,
@@ -110,10 +119,15 @@ internal class ProxyPageState(
     /** 节点列表页里点 tab(含重按当前 tab)= 切换过滤并回到分组列表。 */
     fun selectProxyListTab(index: Int) {
         proxyListTabIndexState.value = index
+        openedGroups.clear() // KimiNoBox
         if (!groupTabsMode && selectedGroupName != null) {
             selectionController.clear()
         }
     }
+
+    /** KimiNoBox: true while the last change of group was a step back along opened groups. */
+    val poppedBack: Boolean
+        get() = poppedBackState.value
 
     /** "更多"弹窗里的搜索开关;关闭时清空查询,避免隐藏的过滤条件继续生效。 */
     fun toggleNodeSearch() {
@@ -128,7 +142,35 @@ internal class ProxyPageState(
     fun testSelectedGroupDelay() {
         selectedGroupName?.let(proxyViewModel::testDelay)
     }
+
+    /**
+     * KimiNoBox: shows group [to], whose row was tapped on the page of group [from]. The group tabs scroll to its page;
+     * the phone split switches to its nodes and to the category tab it sits under. Back returns to [from] under its
+     * tab (the BackHandler in [rememberProxyPageState]). A group without a page (hidden, or with no members) leaves
+     * everything where it is.
+     */
+    suspend fun openGroup(from: String, to: String) {
+        // A jump from anywhere but where the last one landed starts a new chain.
+        if (openedGroups.lastOrNull()?.to != from) openedGroups.clear()
+        val pager = tabbedPagerState
+        if (groupTabsMode && pager != null) {
+            val index = visibleProxyGroups.indexOfFirst { it.name == to }
+            if (index < 0) return
+            openedGroups += OpenedGroup(from = from, fromTab = proxyListTabIndex, to = to)
+            poppedBackState.value = false
+            pager.animateScrollToPage(index)
+        } else if (proxyGroups.any { it.name == to && it.proxies.isNotEmpty() }) {
+            openedGroups += OpenedGroup(from = from, fromTab = proxyListTabIndex, to = to)
+            poppedBackState.value = false
+            if (proxyListTabs.isNotEmpty()) proxyListTabIndexState.value = if (to in strategyGroupNames) 0 else 1
+            selectionController.select(to)
+        }
+    }
 }
+
+/** KimiNoBox: a group opened from a row on [from]'s page while [fromTab] was the category tab. */
+@Immutable
+internal data class OpenedGroup(val from: String, val fromTab: Int, val to: String)
 
 /**
  * [ProxyPageState] 的唯一构造入口。
@@ -228,10 +270,38 @@ internal fun rememberProxyPageState(
         }
     }
 
+    // KimiNoBox: back walks back along the groups opened from rows (ProxyPageState.openGroup), to
+    // the group and the category tab each jump started from, while the page still shows where the
+    // last jump landed
+    val openedGroups = remember { mutableStateListOf<OpenedGroup>() }
+    val poppedBackState = remember { mutableStateOf(false) }
+    val backScope = rememberCoroutineScope()
+    val lastOpened = openedGroups.lastOrNull()
+    val currentGroupName = if (groupTabsMode) activeGroupTabName else selectedGroupName
+    val canReturnToOpener =
+        pane != ProxyPageMode.SplitMaster && isActive && lastOpened != null && currentGroupName == lastOpened.to
+    BackHandler(enabled = canReturnToOpener) {
+        val entry = openedGroups.removeAt(openedGroups.lastIndex)
+        poppedBackState.value = true
+        val pager = tabbedPagerState
+        if (groupTabsMode && pager != null) {
+            val index = visibleProxyGroups.indexOfFirst { it.name == entry.from }
+            if (index >= 0) backScope.launch { pager.animateScrollToPage(index) }
+        } else {
+            proxyListTabIndexState.value = entry.fromTab
+            selectionController.select(entry.from)
+        }
+    }
+
     // Tabs mode is a layout preference, not a navigation level: back must not silently flip the
     // page back to the group drill-down. Only an open group is a level to close; leaving the page
     // is the root stack's job, not this handler's.
-    BackHandler(enabled = pane == ProxyPageMode.Compact && isActive && !groupTabsMode && selectedGroupName != null) {
+    BackHandler(
+        enabled =
+            pane == ProxyPageMode.Compact && isActive && !groupTabsMode && selectedGroupName != null &&
+                !canReturnToOpener
+    ) {
+        openedGroups.clear() // KimiNoBox
         selectionController.clear()
     }
 
@@ -249,13 +319,14 @@ internal fun rememberProxyPageState(
         when {
             showsGroupList -> groupListState
             groupTabsMode -> activeGroupTabListState
-            else -> nodeListState
+            // KimiNoBox: the phone split's pages register their own states (ProxyCompactNodesPane)
+            else -> selectedGroupName?.let(groupTabListStates::get) ?: nodeListState
         }
     val activeGridState =
         when {
             showsGroupList -> null
             groupTabsMode -> activeGroupTabGridState
-            else -> nodeGridState
+            else -> selectedGroupName?.let(groupTabGridStates::get) ?: nodeGridState
         }
     val activeScrollSurface: Any? =
         if (showsGroupList || !twoColumnNodes) activeListState else activeGridState
@@ -281,6 +352,10 @@ internal fun rememberProxyPageState(
         proxyViewModel = proxyViewModel,
         selectionController = selectionController,
         nodeSearchVisible = nodeSearchVisible,
+        proxyGroups = proxyGroups,
+        strategyGroupNames = remember(strategyProxyGroups) { strategyProxyGroups.mapTo(HashSet()) { it.name } },
+        openedGroups = openedGroups,
+        poppedBackState = poppedBackState,
         proxyListTabs = proxyListTabs,
         displayedProxyGroups = displayedProxyGroups,
         visibleProxyGroups = visibleProxyGroups,

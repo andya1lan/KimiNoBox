@@ -83,6 +83,8 @@ internal fun LazyListScope.nodeGridItems(
     outerHorizontalPadding: Dp = UiDp.dp0,
     itemVerticalPadding: Dp = UiDp.dp0,
     keyPrefix: String = "", // KimiNoBox: keeps keys unique when a list shows several runs
+    onOpenGroup: ((String) -> Unit)? = null, // KimiNoBox: group rows open their group
+    groupNow: Map<String, String> = emptyMap(),
 ) {
     val keys = nodeItemKeys(proxies, keyPrefix) // KimiNoBox
     itemsIndexed(
@@ -103,6 +105,8 @@ internal fun LazyListScope.nodeGridItems(
                         horizontal = outerHorizontalPadding,
                         vertical = itemVerticalPadding,
                     ),
+            onOpenGroup = onOpenGroup?.takeIf { proxy.isGroup }?.let { open -> { open(proxy.name) } },
+            groupNow = groupNow[proxy.name],
         )
     }
 }

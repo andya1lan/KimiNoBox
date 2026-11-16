@@ -102,6 +102,11 @@ internal fun ProxyNodePage(
                 onTestDelay = onTestDelay,
             )
         }
+    // KimiNoBox: a row that is itself a group opens that group only from its chevron button (NodeCard)
+    val pageOpenGroup = page.onOpenGroup
+    val onOpenGroup: ((String) -> Unit)? =
+        remember(group.name, pageOpenGroup) { pageOpenGroup?.let { open -> { name: String -> open(group.name, name) } } }
+    val groupNow = page.groupNow
 
     GroupDelayTestGridAnchor(
         gridState = resolvedGridState,
@@ -179,6 +184,8 @@ internal fun ProxyNodePage(
                         compact = true,
                         // 网格不能用 verticalArrangement:折叠为 0 高度的前置项也会各占一份行距。
                         modifier = Modifier.fillMaxWidth().animateItem().padding(vertical = UiDp.dp5),
+                        onOpenGroup = onOpenGroup?.takeIf { proxy.isGroup }?.let { open -> { open(proxy.name) } },
+                        groupNow = groupNow[proxy.name],
                     )
                 }
             }
@@ -221,6 +228,8 @@ internal fun ProxyNodePage(
                 outerHorizontalPadding = UiDp.dp0,
                 itemVerticalPadding = UiDp.dp5,
                 keyPrefix = if (sections == null) "" else "$index/",
+                onOpenGroup = onOpenGroup,
+                groupNow = groupNow,
             )
         }
     }

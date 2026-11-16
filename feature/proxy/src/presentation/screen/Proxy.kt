@@ -34,12 +34,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -242,6 +246,13 @@ private fun ProxyPageShell(
                     topOverlayInset = state.categoryTabInset,
                 )
             }
+            // KimiNoBox: a node row that is a group opens it (ProxyNodePage)
+            val groupNow = remember(proxyGroups) { proxyGroups.associate { it.name to it.now } }
+            val currentState by rememberUpdatedState(state)
+            val openGroup: (String, String) -> Unit =
+                remember(coroutineScope) {
+                    { from: String, to: String -> coroutineScope.launch { currentState.openGroup(from, to) } }
+                }
             // Values shared by all three node-page hosts; each call site copies only the
             // entries it changes.
             val nodePage =
@@ -257,6 +268,8 @@ private fun ProxyPageShell(
                     twoColumnNodes = state.twoColumnNodes,
                     searchQuery = state.nodeSearchQuery,
                     searchVisible = nodeSearchVisible,
+                    onOpenGroup = openGroup,
+                    groupNow = groupNow,
                 )
             val onSearchQueryChange: (String) -> Unit = { state.nodeSearchQuery = it }
             Box(modifier = Modifier.fillMaxSize().nestedScroll(state.tabCollapseState.nestedScrollConnection)) {
@@ -399,7 +412,10 @@ private fun ProxyCompactNodesPane(
 ) {
     AnimatedContent(
         targetState = state.selectedGroupName,
-        transitionSpec = { proxyGroupContentTransform(forward = targetState != null) },
+        transitionSpec = {
+            // KimiNoBox: going back along opened groups slides the way it came
+            proxyGroupContentTransform(forward = targetState != null && (initialState == null || !state.poppedBack))
+        },
         label = "proxy_content_slide",
     ) { targetGroupName ->
         if (targetGroupName == null) {
@@ -407,18 +423,34 @@ private fun ProxyCompactNodesPane(
                 groupListContent()
             }
         } else {
+            // KimiNoBox: each page shows its own group on its own scroll state. Reading the selection
+            // here made the leaving and the arriving page both draw the new group on one shared
+            // LazyListState during a group-to-group slide, and a card of the arriving page then
+            // stayed blank until the list scrolled.
+            val pageGroup =
+                proxyGroups.firstOrNull { it.name == targetGroupName }
+                    ?: state.selectedNodeGroup?.takeIf { it.name == targetGroupName }
+            // Back to a group opened earlier finds its scroll where it was left.
+            val pageListState = remember(targetGroupName) { state.groupTabListStates[targetGroupName] ?: LazyListState() }
+            val pageGridState = remember(targetGroupName) { state.groupTabGridStates[targetGroupName] ?: LazyGridState() }
+            LaunchedEffect(targetGroupName, pageListState, pageGridState) {
+                state.groupTabListStates[targetGroupName] = pageListState
+                state.groupTabGridStates[targetGroupName] = pageGridState
+            }
             // The transition needs an opaque background so it can cover the group list
             // underneath.
             Box(modifier = Modifier.fillMaxSize().background(MiuixTheme.colorScheme.surface)) {
                 ProxyNodePage(
                     page =
                         nodePage.copy(
-                            group = state.selectedNodeGroup,
+                            group = pageGroup,
+                            listState = pageListState,
+                            gridState = pageGridState,
                             topOverlayInset = state.categoryTabInset,
                         ),
                     proxyViewModel = proxyViewModel,
                     onSearchQueryChange = onSearchQueryChange,
-                    onTestDelay = state::testSelectedGroupDelay,
+                    onTestDelay = { proxyViewModel.testDelay(targetGroupName) },
                 )
             }
         }

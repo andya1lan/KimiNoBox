@@ -28,6 +28,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -54,6 +55,7 @@ import com.github.yumeyucca.yumebox.presentation.icon.Yume
 import com.github.yumeyucca.yumebox.presentation.icon.yume.BadgeDollarSign
 import com.github.yumeyucca.yumebox.presentation.icon.yume.CircleGauge
 import com.github.yumeyucca.yumebox.presentation.icon.yume.Tags
+import com.github.yumeyucca.yumebox.presentation.icon.yume.chevron
 import com.github.yumeyucca.yumebox.presentation.icon.yume.clock
 import com.github.yumeyucca.yumebox.presentation.theme.AppTheme
 import com.github.yumeyucca.yumebox.presentation.theme.UiDp
@@ -256,6 +258,9 @@ internal fun NodeCard(
     modifier: Modifier = Modifier,
     showCountryFlag: Boolean = true,
     compact: Boolean = false,
+    // KimiNoBox: a row that is itself a group gets its own way in, labelled with what the group uses now
+    onOpenGroup: (() -> Unit)? = null,
+    groupNow: String? = null,
 ) {
     val spacing = AppTheme.spacing
     val sizes = AppTheme.sizes
@@ -280,6 +285,8 @@ internal fun NodeCard(
                 isDelayTesting = isDelayTesting,
                 onTestClick = onTestClick,
                 showCountryFlag = showCountryFlag,
+                onOpenGroup = onOpenGroup,
+                groupNow = groupNow,
             )
         } else {
             val tags = remember(proxy.name) { extractNodeTags(proxy.name) }
@@ -301,7 +308,7 @@ internal fun NodeCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(sizes.nodeCardTitleGap),
                 ) {
-                    NodeDisplayName(presentation.displayName)
+                    NodeDisplayName(presentation.displayName, now = groupNow.takeIf { onOpenGroup != null })
 
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -321,12 +328,50 @@ internal fun NodeCard(
                     }
                 }
 
-                NodeSelectionTag(
-                    isSelected = selected,
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
+                if (onOpenGroup != null) {
+                    // The card border already marks a picked group; the button takes the tag's place.
+                    NodeOpenGroupButton(
+                        onClick = onOpenGroup,
+                        size = 36.dp,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                } else {
+                    NodeSelectionTag(
+                        isSelected = selected,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
             }
         }
+    }
+}
+
+/**
+ * KimiNoBox: the only way into the group a row stands for (tapping the row picks it, like any node), a round
+ * chevron in the style of an iOS disclosure button.
+ */
+@Composable
+private fun NodeOpenGroupButton(
+    onClick: () -> Unit,
+    size: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val primary = MiuixTheme.colorScheme.primary
+    Box(
+        modifier =
+            modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(primary.copy(alpha = AppTheme.opacity.subtle))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Yume.chevron,
+            contentDescription = "进入这个策略组",
+            tint = primary,
+            modifier = Modifier.size(size / 2),
+        )
     }
 }
 
@@ -337,6 +382,8 @@ private fun NodeCompactCardContent(
     isDelayTesting: Boolean,
     onTestClick: ((String) -> Unit)?,
     showCountryFlag: Boolean,
+    onOpenGroup: (() -> Unit)?,
+    groupNow: String?,
 ) {
     val spacing = AppTheme.spacing
     val iconLabel = remember(proxy.type) { iconLabel(proxy.type) }
@@ -363,6 +410,7 @@ private fun NodeCompactCardContent(
                 presentation.displayName,
                 modifier = Modifier.weight(1f),
             )
+            if (onOpenGroup != null) NodeOpenGroupButton(onClick = onOpenGroup, size = 26.dp)
         }
 
         Row(
@@ -370,7 +418,8 @@ private fun NodeCompactCardContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = proxy.type,
+                // KimiNoBox: a group shows the member it uses now instead of its type
+                text = groupNow?.takeIf { onOpenGroup != null && it.isNotBlank() } ?: proxy.type,
                 style = MiuixTheme.textStyles.footnote1,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 maxLines = 1,
@@ -388,17 +437,40 @@ private fun NodeCompactCardContent(
     }
 }
 
-/** A node's name: one line, one style, wherever a card shows it. */
+/**
+ * A node's name: one line, one style, wherever a card shows it. KimiNoBox: a group row adds the member the group uses
+ * [now] after its name, quieter and cut first.
+ */
 @Composable
-private fun NodeDisplayName(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = name,
-        style = MiuixTheme.textStyles.body2,
-        color = MiuixTheme.colorScheme.onSurface,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
+private fun NodeDisplayName(name: String, modifier: Modifier = Modifier, now: String? = null) {
+    if (now.isNullOrBlank()) {
+        Text(
+            text = name,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier,
+        )
+        return
+    }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = name,
+            style = MiuixTheme.textStyles.body2,
+            color = MiuixTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = now,
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = UiDp.dp8).weight(1f, fill = false),
+        )
+    }
 }
 
 @Composable

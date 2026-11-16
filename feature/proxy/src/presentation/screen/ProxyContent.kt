@@ -86,4 +86,8 @@ internal data class ProxyNodePageState(
     val searchVisible: Boolean,
     val group: ProxyGroupInfo? = null,
     val topOverlayInset: Dp = UiDp.dp0,
+    /** KimiNoBox: opens the group `to` from a row on the page of group `from` ([ProxyPageState.openGroup]). */
+    val onOpenGroup: ((from: String, to: String) -> Unit)? = null,
+    /** KimiNoBox: what each group uses now, for the group rows' open buttons. */
+    val groupNow: Map<String, String> = emptyMap(),
 )
