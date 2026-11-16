@@ -44,8 +44,10 @@ object PollingTimerSpecs {
     val MoeElapsedClock = PollingTimerSpec("acg_elapsed_clock", 1_000L, 0L)
     val ConnectionsPolling = PollingTimerSpec("connections_polling", 1_000L, 0L)
     val RuntimeTrafficPolling = PollingTimerSpec("runtime_traffic_polling", 1_000L, 0L)
-    val RuntimeProxyGroupSyncFast = PollingTimerSpec("runtime_proxy_group_sync_fast", 1_000L, 0L)
-    val RuntimeProxyGroupSyncSlow = PollingTimerSpec("runtime_proxy_group_sync_slow", 3_000L, 0L)
+    // KimiNoBox: was every second. The page reads once when it opens (RuntimePolling) and then
+    // only tops up a long stay; tests and selections refresh on their own.
+    val RuntimeProxyGroupSyncFast = PollingTimerSpec("runtime_proxy_group_sync_fast", 30_000L)
+    val RuntimeProxyGroupSyncSlow = PollingTimerSpec("runtime_proxy_group_sync_slow", 60_000L) // KimiNoBox
     val ServiceTrafficNotification = PollingTimerSpec("service_traffic_notification", 1_000L, 0L)
     val SessionConnectionTracking = PollingTimerSpec("session_connection_tracking", 5_000L, 0L)
     val RemoteControllerProbe = PollingTimerSpec("remote_controller_probe", 250L, 250L)

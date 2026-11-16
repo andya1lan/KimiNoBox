@@ -68,6 +68,12 @@ internal class RuntimePolling(
                 ProxyGroupSyncPriority.SLOW -> PollingTimerSpecs.RuntimeProxyGroupSyncSlow
                 ProxyGroupSyncPriority.OFF -> return
             }
-        groupJob = scope.launch { PollingTimers.ticks(timerSpec).collect { onGroupTick() } }
+        groupJob =
+            scope.launch {
+                // KimiNoBox: read once on entry; the shared timer may already be running, so its
+                // next tick can be most of an interval away
+                onGroupTick()
+                PollingTimers.ticks(timerSpec).collect { onGroupTick() }
+            }
     }
 }
