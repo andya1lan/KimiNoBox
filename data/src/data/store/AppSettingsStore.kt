@@ -59,7 +59,9 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val moeHomeQuote by strFlow(DEFAULT_HOME_QUOTE) // KimiNoBox
     val moeHomeQuoteAuthor by strFlow("") // KimiNoBox: the default quote's line carries no byline
     val moeSidebarExpanded by boolFlow(true)
-    val moeStatusBarSpacing by boolFlow(false)
+    // KimiNoBox: on, so the Duo strip's panel starts below a frosted status bar and its uptime
+    // clears the system icons (MoeDuoSidebar.kt)
+    val moeStatusBarSpacing by boolFlow(true)
     val splitLeftRatio by floatFlow(0.42f)
     val pageScale by floatFlow(1.0f)
     val predictiveBackEnabled by boolFlow(false)
