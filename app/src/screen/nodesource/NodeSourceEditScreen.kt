@@ -27,6 +27,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,9 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.github.yumeyucca.yumebox.common.util.toast
+import com.github.yumeyucca.yumebox.data.store.AppSettingsStore
 import com.github.yumeyucca.yumebox.nodesource.ContentCheck
 import com.github.yumeyucca.yumebox.nodesource.FetchedSource
 import com.github.yumeyucca.yumebox.nodesource.NodeSourceInput
@@ -63,6 +66,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 @Composable
 fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileId: String?) {
     val manager: NodeSourceManager = koinInject()
+    val appSettings: AppSettingsStore = koinInject()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sources by manager.sources.collectAsState()
@@ -125,7 +129,7 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
         }
         saving = true
         scope.launch {
-            val form = NodeSourceTemplate.formFor(input, existing?.form)
+            val form = NodeSourceTemplate.formFor(input, existing?.form, appSettings.delayTestUrl.value)
             runCatching {
                     if (existing == null) manager.create(form, requireNotNull(fetched), bindProfileId)
                     else manager.save(existing, form, fetched?.takeIf { urlChanged })
@@ -232,6 +236,7 @@ fun NodeSourceEditScreen(navigator: Navigator, overrideId: String?, bindProfileI
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                HealthCheckRow(checked = input.healthCheck, onCheckedChange = { input = input.copy(healthCheck = it) })
                 OutlinedTextField(
                     value = input.prefix,
                     onValueChange = { input = input.copy(prefix = it) },
@@ -287,6 +292,28 @@ private fun FetchedCard(fetched: FetchedSource) {
     }
 }
 
+/** 「定期测速」: the core tests the source's nodes on its own, so their delays show without a manual test. */
+@Composable
+private fun HealthCheckRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier.fillMaxWidth()
+                .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+                .padding(vertical = 8.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(HEALTH_CHECK, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                HEALTH_CHECK_SUPPORT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
 /** The last check of the name: its problem, and a free name to offer when it is taken. */
 private data class NameCheck(val problem: String? = null, val suggestion: String? = null)
 
@@ -305,5 +332,7 @@ private const val SETTINGS = "设置"
 private const val NEED_FETCH = "请先点「获取」下载一次订阅"
 private const val NAME_MISSING = "订阅没有提供名称，请填写"
 private const val INTERVAL_SUPPORT = "内核按这个间隔自动更新，0 表示不自动更新"
+private const val HEALTH_CHECK = "定期测速"
+private const val HEALTH_CHECK_SUPPORT = "内核每 5 分钟测一次全部节点，没有连接用到这个节点源时跳过。地址用「延迟测试地址」"
 private const val PREFIX_LABEL = "节点前缀（可选）"
 private const val PREFIX_SUPPORT = "加在每个节点名称前，留空则不加"

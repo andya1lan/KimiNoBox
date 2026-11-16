@@ -33,6 +33,8 @@ data class NodeSourceForm(
     val prefix: String,
     /** The `<id>` of `./providers/src-<id>.yaml`, the core's cache file of this source. */
     val pathId: String,
+    /** 「定期测速」: the URL the core tests every node with, or null for no checks. */
+    val healthCheckUrl: String? = null,
 )
 
 /** What the user typed, before it becomes a [NodeSourceForm]. */
@@ -42,6 +44,8 @@ data class NodeSourceInput(
     val interval: String = NodeSourceTemplate.DEFAULT_INTERVAL_SECONDS.toString(),
     /** Added before every node name; empty (the default) adds none. */
     val prefix: String = "",
+    /** 「定期测速」, on for a new source. */
+    val healthCheck: Boolean = true,
 )
 
 data class NodeSourceProblems(
@@ -66,6 +70,11 @@ data class NodeSourceProblems(
  *     path: ./providers/src-k3n8x2qa.yaml
  *     override:
  *       additional-prefix: "air "
+ *     health-check:
+ *       enable: true
+ *       url: "https://www.gstatic.com/generate_204"
+ *       interval: 300
+ *       lazy: true
  * ```
  * Profile groups pick the nodes up with `include-all: true`; `use:` would fail the first import's
  * `--test`, which runs before any override adds the provider.
@@ -74,11 +83,18 @@ object NodeSourceTemplate {
     /** A new source updates hourly; the subscription's `Profile-Update-Interval` is not read. */
     const val DEFAULT_INTERVAL_SECONDS = 3_600L
 
+    /**
+     * 「定期测速」 tests every node this often, and only while connections go through the source's
+     * groups (`lazy`), so an idle phone tests nothing.
+     */
+    const val HEALTH_CHECK_INTERVAL_SECONDS = 300L
+
     private const val PATH_ID_LENGTH = 8
     private const val PATH_ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
     private val pathPattern = Regex("""\./providers/src-([a-z0-9]{$PATH_ID_LENGTH})\.yaml""")
     private val urlPattern = Regex("""^https?://\S+$""", RegexOption.IGNORE_CASE)
-    private val bodyKeys = setOf("type", "url", "interval", "path", "override")
+    private val bodyKeys = setOf("type", "url", "interval", "path", "override", "health-check")
+    private val healthCheckKeys = listOf("enable", "url", "interval", "lazy")
 
     /** The prefix that marks every node of [name] with the source name, for the duplicate fix. */
     fun defaultPrefix(name: String): String = "$name "
@@ -97,6 +113,16 @@ object NodeSourceTemplate {
             )
         if (form.prefix.isNotEmpty()) {
             body += "override" to NodeYaml.map("additional-prefix" to NodeYaml.str(form.prefix))
+        }
+        form.healthCheckUrl?.let { testUrl ->
+            body +=
+                "health-check" to
+                    NodeYaml.map(
+                        "enable" to NodeYaml.bool(true),
+                        "url" to NodeYaml.str(testUrl),
+                        "interval" to NodeYaml.int(HEALTH_CHECK_INTERVAL_SECONDS),
+                        "lazy" to NodeYaml.bool(true),
+                    )
         }
         val root =
             NodeYaml.map(NodeTemplates.PROVIDERS_KEY to NodeYaml.map(form.name to NodeYaml.map(body)))
@@ -133,7 +159,23 @@ object NodeSourceTemplate {
 
                 else -> return null
             }
-        return NodeSourceForm(name, url, interval, prefix, pathId)
+        val healthCheckUrl =
+            when (val check = body["health-check"]) {
+                null -> null
+                is MappingNode ->
+                    check.takeIf {
+                        it.keys() == healthCheckKeys &&
+                            it["enable"]?.scalarText == "true" &&
+                            it["interval"]?.longValue == HEALTH_CHECK_INTERVAL_SECONDS &&
+                            it["lazy"]?.scalarText == "true"
+                    }
+                        ?.get("url")
+                        ?.stringValue
+                        ?: return null
+
+                else -> return null
+            }
+        return NodeSourceForm(name, url, interval, prefix, pathId, healthCheckUrl)
     }
 
     fun inputOf(form: NodeSourceForm): NodeSourceInput =
@@ -142,6 +184,7 @@ object NodeSourceTemplate {
             url = form.url,
             interval = form.intervalSeconds.toString(),
             prefix = form.prefix,
+            healthCheck = form.healthCheckUrl != null,
         )
 
     /** [takenNames]: provider names of the other node sources. */
@@ -166,11 +209,13 @@ object NodeSourceTemplate {
     /**
      * The form to save for a valid [input]. [original] is the saved form when editing: a changed
      * URL gets a new cache path, since the core keeps serving a fresh cache file of the old URL
-     * until its interval ends.
+     * until its interval ends. [testUrl] is the App's 「延迟测试地址」, which 「定期测速」 uses as
+     * it is at the save.
      */
     fun formFor(
         input: NodeSourceInput,
         original: NodeSourceForm?,
+        testUrl: String,
         generatePathId: () -> String = { newPathId() },
     ): NodeSourceForm {
         val url = input.url.trim()
@@ -180,6 +225,7 @@ object NodeSourceTemplate {
             intervalSeconds = input.interval.trim().toLong(),
             prefix = input.prefix,
             pathId = original?.takeIf { it.url == url }?.pathId ?: generatePathId(),
+            healthCheckUrl = testUrl.takeIf { input.healthCheck },
         )
     }
 }

@@ -136,11 +136,14 @@ class NodeSourceTemplateTest {
         val input = NodeSourceInput(name = "✈️ air", url = "https://e.com/s")
 
         assertEquals("3600", input.interval)
-        assertEquals("", NodeSourceTemplate.formFor(input, null) { "k3n8x2qa" }.prefix)
-        assertEquals("A ", NodeSourceTemplate.formFor(input.copy(prefix = "A "), null) { "k3n8x2qa" }.prefix)
+        assertEquals("", NodeSourceTemplate.formFor(input, null, TEST_URL) { "k3n8x2qa" }.prefix)
+        assertEquals("A ", NodeSourceTemplate.formFor(input.copy(prefix = "A "), null, TEST_URL) { "k3n8x2qa" }.prefix)
 
         val saved = NodeSourceForm("air", "https://e.com/s", 60, "air ", "k3n8x2qa")
-        assertEquals(NodeSourceInput("air", "https://e.com/s", "60", "air "), NodeSourceTemplate.inputOf(saved))
+        assertEquals(
+            NodeSourceInput("air", "https://e.com/s", "60", "air ", healthCheck = false),
+            NodeSourceTemplate.inputOf(saved),
+        )
         assertEquals("", NodeSourceTemplate.inputOf(saved.copy(prefix = "")).prefix)
     }
 
@@ -149,9 +152,11 @@ class NodeSourceTemplateTest {
         val saved = NodeSourceForm("air", "https://e.com/a", 60, "air ", "k3n8x2qa")
 
         val sameUrl =
-            NodeSourceTemplate.formFor(NodeSourceTemplate.inputOf(saved).copy(prefix = "A "), saved) { "zzzzzzzz" }
+            NodeSourceTemplate.formFor(NodeSourceTemplate.inputOf(saved).copy(prefix = "A "), saved, TEST_URL) {
+                "zzzzzzzz"
+            }
         val newUrl =
-            NodeSourceTemplate.formFor(NodeSourceTemplate.inputOf(saved).copy(url = " https://e.com/b "), saved) {
+            NodeSourceTemplate.formFor(NodeSourceTemplate.inputOf(saved).copy(url = " https://e.com/b "), saved, TEST_URL) {
                 "zzzzzzzz"
             }
 
@@ -183,10 +188,74 @@ class NodeSourceTemplateTest {
     fun aNewSourceUpdatesHourlyUnlessChanged() {
         val input = NodeSourceInput(name = "air", url = "https://example.com/sub")
         assertEquals("3600", input.interval)
-        val form = NodeSourceTemplate.formFor(input, original = null) { "k3n8x2qa" }
+        val form = NodeSourceTemplate.formFor(input, original = null, testUrl = TEST_URL) { "k3n8x2qa" }
         assertEquals(3_600L, form.intervalSeconds)
         assertTrue(NodeSourceTemplate.render(form).contains("interval: 3600"))
-        val changed = NodeSourceTemplate.formFor(input.copy(interval = "7200"), original = null) { "k3n8x2qa" }
+        val changed =
+            NodeSourceTemplate.formFor(input.copy(interval = "7200"), original = null, testUrl = TEST_URL) { "k3n8x2qa" }
         assertTrue(NodeSourceTemplate.render(changed).contains("interval: 7200"))
+    }
+
+    @Test
+    fun aNewSourceIsCheckedLazilyWithTheAppsTestUrl() {
+        val input = NodeSourceInput(name = "air", url = "https://example.com/sub")
+        assertTrue(input.healthCheck)
+
+        val form = NodeSourceTemplate.formFor(input, original = null, testUrl = TEST_URL) { "k3n8x2qa" }
+
+        assertEquals(TEST_URL, form.healthCheckUrl)
+        assertEquals(
+            """
+            # kiminobox:node-source v1
+            proxy-providers-merge:
+              air:
+                type: http
+                url: "https://example.com/sub"
+                interval: 3600
+                path: ./providers/src-k3n8x2qa.yaml
+                health-check:
+                  enable: true
+                  url: "https://cp.cloudflare.com/generate_204"
+                  interval: 300
+                  lazy: true
+
+            """.trimIndent(),
+            NodeSourceTemplate.render(form),
+        )
+        assertEquals(form, NodeSourceTemplate.parse(NodeSourceTemplate.render(form)))
+        assertTrue(NodeSourceTemplate.inputOf(form).healthCheck)
+    }
+
+    @Test
+    fun turningTheCheckOffLeavesItOut() {
+        val input = NodeSourceInput(name = "air", url = "https://example.com/sub", healthCheck = false)
+
+        val form = NodeSourceTemplate.formFor(input, original = null, testUrl = TEST_URL) { "k3n8x2qa" }
+
+        assertNull(form.healthCheckUrl)
+        assertTrue(!NodeSourceTemplate.render(form).contains("health-check"))
+    }
+
+    @Test
+    fun handEditedChecksAreNotParsed() {
+        val valid =
+            NodeSourceTemplate.render(
+                NodeSourceForm("air", "https://e.com/s", 60, "", "k3n8x2qa", healthCheckUrl = TEST_URL)
+            )
+        val edits =
+            listOf(
+                valid.replace("      interval: 300\n", "      interval: 600\n"),
+                valid.replace("      lazy: true\n", "      lazy: false\n"),
+                valid.replace("      enable: true\n", "      enable: false\n"),
+                valid.replace("      lazy: true\n", ""),
+                valid.replace("      lazy: true\n", "      lazy: true\n      timeout: 3000\n"),
+                valid.replace("      url: \"$TEST_URL\"\n", ""),
+            )
+
+        edits.forEach { edited -> assertNull(edited, NodeSourceTemplate.parse(edited)) }
+    }
+
+    private companion object {
+        const val TEST_URL = "https://cp.cloudflare.com/generate_204"
     }
 }
