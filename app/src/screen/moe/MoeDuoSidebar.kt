@@ -82,6 +82,20 @@ internal object MoeDuoUi {
 
     /** The hero sits this far below the panel's top edge, as far as from its sides. */
     val heroTopGap = MoeUi.Hero.containerHorizontalInset
+
+    /**
+     * With the status bar spacing on, the panel starts this far below the middle of the status bar
+     * inset, where the system icons sit; on punch-hole screens the inset runs well below them.
+     */
+    private val statusBarIconClearance = 14.dp
+
+    /** Where the panel starts, for the home and for its preview in the wallpaper editor. */
+    fun statusBarTop(spacing: Boolean, statusBarInset: Dp): Dp =
+        if (spacing) {
+            minOf(statusBarInset, statusBarInset / 2 + statusBarIconClearance)
+        } else {
+            MoeUi.Hero.containerHorizontalInset
+        }
     val digitSize = 28.sp
     val digitLineHeight = 30.sp
     val digitDividerWidth = 14.dp

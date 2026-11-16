@@ -108,7 +108,8 @@ fun MoeHomePage(
     val statusBarSpacing by appSettingsViewModel.moeStatusBarSpacing.state.collectAsState()
 
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val statusBarTop = if (statusBarSpacing) statusBarInset else MoeUi.Hero.containerHorizontalInset
+    // KimiNoBox: the panel tucks up to just under the status bar icons instead of the inset's bottom edge
+    val statusBarTop = MoeDuoUi.statusBarTop(statusBarSpacing, statusBarInset)
     // The window picks the layout once here; neither layout composable inspects the window mode.
     val homeLayout =
         if (windowLayoutMode.usesSplitShell) {

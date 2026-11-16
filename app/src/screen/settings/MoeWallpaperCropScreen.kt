@@ -73,12 +73,12 @@ import com.github.yumeyucca.yumebox.presentation.theme.isDark
 import com.github.yumeyucca.yumebox.screen.home.HomeProxyControlState
 import com.github.yumeyucca.yumebox.screen.moe.LocalUseSystemWallpaper
 import com.github.yumeyucca.yumebox.screen.moe.LocalWallpaperRefreshKey
+import com.github.yumeyucca.yumebox.screen.moe.MoeDuoUi
 import com.github.yumeyucca.yumebox.screen.moe.MoeHomeActions
 import com.github.yumeyucca.yumebox.screen.moe.MoeHomeLayout
 import com.github.yumeyucca.yumebox.screen.moe.MoeHomeLayoutMode
 import com.github.yumeyucca.yumebox.screen.moe.MoeHomeLayoutState
 import com.github.yumeyucca.yumebox.screen.moe.MoeSidebarIconItem
-import com.github.yumeyucca.yumebox.screen.moe.MoeUi
 import com.github.yumeyucca.yumebox.screen.moe.SystemWallpaperPreferenceItem
 import com.github.yumeyucca.yumebox.screen.moe.formatMoeClock
 import io.github.yumeyucca.lucide.Lucide
@@ -247,8 +247,7 @@ fun MoeWallpaperCropScreen(
                             quoteAuthor = quoteAuthor,
                             isDarkSurface = moe.themeMode.isDark(),
                             now = now,
-                            statusBarTop =
-                                if (statusBarSpacing) statusBarInset else MoeUi.Hero.containerHorizontalInset,
+                            statusBarTop = MoeDuoUi.statusBarTop(statusBarSpacing, statusBarInset), // KimiNoBox
                         )
                     }
                 }
