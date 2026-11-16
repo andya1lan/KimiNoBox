@@ -197,16 +197,25 @@ private fun ProxyPageShell(
             nodeSearchVisible = nodeSearchVisible,
             onOpenRouting = onOpenRouting,
         )
-    // Top bar speed-test button: always tests all nodes (the group page and the node
-    // page are no longer distinguished).
-    val testAllNodes: () -> Unit = { proxyViewModel.testDelay() }
+    // KimiNoBox: the top bar tests the group on screen (a tab, the phone split's node page, the
+    // shell's right pane); only the group list tests every node
+    val testShownNodes: () -> Unit = {
+        val shownGroup =
+            when {
+                state.groupTabsMode -> state.tabbedPagerState?.currentPage?.let(state.visibleProxyGroups::getOrNull)?.name
+                pane == ProxyPageMode.SplitDetail -> state.selectedNodeGroup?.name
+                pane == ProxyPageMode.Compact -> state.selectedGroupName
+                else -> null
+            }
+        if (shownGroup != null) proxyViewModel.testDelay(shownGroup) else proxyViewModel.testDelay()
+    }
 
     ProvideProxyDelayFlows(proxyViewModel) {
         GlassScaffold(
             topBar = {
                 ProxyTopBarSection(
                     scrollBehavior = scrollBehavior,
-                    onTestAllNodes = testAllNodes,
+                    onTestAllNodes = testShownNodes,
                     nodeMenuActions = nodeMenuActions,
                 )
             },
