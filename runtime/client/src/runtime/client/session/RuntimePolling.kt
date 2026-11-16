@@ -25,7 +25,9 @@ import com.github.yumeyucca.yumebox.core.util.PollingTimers
 import com.github.yumeyucca.yumebox.runtime.client.ProxyGroupSyncPriority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /** Owns traffic + proxy-group polling loops for the runtime client. Keeps timer policy out of the facade body. */
 internal class RuntimePolling(
@@ -72,8 +74,20 @@ internal class RuntimePolling(
             scope.launch {
                 // KimiNoBox: read once on entry; the shared timer may already be running, so its
                 // next tick can be most of an interval away
-                onGroupTick()
-                PollingTimers.ticks(timerSpec).collect { onGroupTick() }
+                groupTick()
+                PollingTimers.ticks(timerSpec).collect { groupTick() }
             }
+    }
+
+    /**
+     * KimiNoBox: a read that ran out of time (a busy device) only skips this tick. The timeout is a
+     * CancellationException, so let through it would end the loop until the page is opened again.
+     */
+    private suspend fun groupTick() {
+        try {
+            onGroupTick()
+        } catch (timeout: TimeoutCancellationException) {
+            Timber.d(timeout, "Proxy group read timed out")
+        }
     }
 }
