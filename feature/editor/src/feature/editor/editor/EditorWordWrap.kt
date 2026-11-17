@@ -38,7 +38,6 @@ import org.koin.compose.koinInject
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import io.github.rosemoe.sora.widget.CodeEditor as SoraEditor
 
 /**
  * KimiNoBox: soft wrap of the code editors (docs/plan-a-round4.md E4), one app-wide setting that
@@ -73,23 +72,6 @@ fun wordWrapTopAction(): GlassTopAction {
         onClick = { setting.set(!on) },
         tint = if (on) MiuixTheme.colorScheme.primary else Color.Unspecified,
     )
-}
-
-/**
- * Turns soft wrap on or off. Once Sora has laid the text out again, the line that was at the top
- * is at the top again, and the view goes back to the left edge.
- */
-internal fun SoraEditor.applyWordWrap(on: Boolean) {
-    if (isWordwrap == on) return
-    val topLine = firstVisibleLine
-    isWordwrap = on
-    post {
-        // The bottom of the line's first row, less one row, is where the line starts
-        val top = runCatching { layout.getCharLayoutOffset(topLine, 0)[0].toInt() - rowHeight }.getOrDefault(0)
-        scroller.forceFinished(true)
-        scroller.startScroll(offsetX, offsetY, -offsetX, top.coerceIn(0, scrollMaxY) - offsetY, 0)
-        invalidate()
-    }
 }
 
 /** Material's wrap_text icon, which the app's icon sets lack. */

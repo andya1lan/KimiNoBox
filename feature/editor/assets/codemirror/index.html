@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- KimiNoBox: the page behind the code editor. editor.js is built from feature/editor/codemirror. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <style>
+      @font-face {
+        font-family: "JetBrains Mono";
+        src: url("font.ttf") format("truetype");
+        font-display: block;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg, transparent);
+        -webkit-tap-highlight-color: transparent;
+      }
+      #editor {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <script src="editor.js"></script>
+  </body>
+</html>

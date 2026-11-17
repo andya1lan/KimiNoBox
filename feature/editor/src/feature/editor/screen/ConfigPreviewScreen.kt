@@ -189,16 +189,7 @@ fun ConfigPreviewScreen(
                 fontSizeSp = fontSizeSp,
                 onScroll = { scroll -> scrollBehavior.state.contentOffset = -scroll.toFloat() },
             )
-            EditorSymbolBar(
-                onSymbol = { action ->
-                    editorState.editor?.let { editor ->
-                        when (action) {
-                            EditorSymbolAction.Indent -> editor.indentOrCommitTab()
-                            is EditorSymbolAction.Insert -> editor.insertText(action.text, 1)
-                        }
-                    }
-                }
-            )
+            // KimiNoBox: the editor shows its own symbol bar, above the keyboard
         }
 
         EditorExitGuard(

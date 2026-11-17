@@ -26,8 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.yumeyucca.yumebox.core.model.LanguageScope
+import com.github.yumeyucca.yumebox.feature.editor.codemirror.CodeMirrorHandle // KimiNoBox
 import com.github.yumeyucca.yumebox.feature.editor.format.CodeFormatter
-import io.github.rosemoe.sora.widget.CodeEditor
 
 /** The one default text size for every editor surface: preview, fullscreen and the dialog. */
 internal const val DefaultEditorFontSizeSp = 14f
@@ -41,7 +41,7 @@ class CodeEditorState(
     // KimiNoBox: soft wrap, applied by CodeEditor, which keeps it on the app-wide setting
     var wordWrap: Boolean by mutableStateOf(wordWrap)
 
-    var editor: CodeEditor? by mutableStateOf(null)
+    var editor: CodeMirrorHandle? by mutableStateOf(null) // KimiNoBox: was Sora's CodeEditor
         internal set
 
     private var canUndoState: Boolean by mutableStateOf(false)
