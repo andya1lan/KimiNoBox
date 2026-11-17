@@ -53,8 +53,8 @@ internal val ZhHansYumeStrings_Home: YumeStrings_Home =
                 WallpaperDescription = "长按壁纸，从相册换图",
                 SwipeTitle = "左右滑动",
                 SwipeDescription = "横向滑动首页，切换代理、配置和设置页面",
-                AddTitle = "设置系统壁纸",
-                AddDescription = "开启开关并完成权限申请，让首页使用当前系统壁纸",
+                AddTitle = "使用系统壁纸", // KimiNoBox: the system wallpaper is opt-in
+                AddDescription = "首页默认用自带壁纸，打开开关可改用当前的系统壁纸",
             ),
         Update =
             YumeStrings_Home_Update(
@@ -120,8 +120,8 @@ internal val ZhYumeStrings_Home: YumeStrings_Home =
                 WallpaperDescription = "長按桌布，從相簿換圖",
                 SwipeTitle = "左右滑動",
                 SwipeDescription = "橫向滑動首頁，切換代理、設定檔和設定頁面",
-                AddTitle = "設定系統桌布",
-                AddDescription = "開啟開關並完成權限申請，讓首頁使用目前的系統桌布",
+                AddTitle = "使用系統桌布", // KimiNoBox
+                AddDescription = "首頁預設使用內建桌布，開啟開關可改用目前的系統桌布",
             ),
         Update =
             YumeStrings_Home_Update(
@@ -187,8 +187,8 @@ internal val EnYumeStrings_Home: YumeStrings_Home =
                 WallpaperDescription = "Long-press the wallpaper to pick from your album",
                 SwipeTitle = "Swipe pages",
                 SwipeDescription = "Swipe across Home to switch to Proxy, Profiles, and Settings",
-                AddTitle = "Set System Wallpaper",
-                AddDescription = "Enable the switch and grant access to use your current system wallpaper",
+                AddTitle = "Use System Wallpaper", // KimiNoBox
+                AddDescription = "Home uses the built-in wallpaper; turn this on to use your system wallpaper instead",
             ),
         Update =
             YumeStrings_Home_Update(

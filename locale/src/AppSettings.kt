@@ -46,7 +46,7 @@ internal val ZhHansYumeStrings_AppSettings: YumeStrings_AppSettings =
                 PredictiveBackRestartSummary = "下次启动应用后生效",
                 PredictiveBackProgressTitle = "预测返回幅度",
                 StatusBarSpacingTitle = "增加状态栏间隔",
-                SystemWallpaperTitle = "设置为系统壁纸",
+                SystemWallpaperTitle = "使用系统壁纸", // KimiNoBox: "设置为" read as changing the phone's wallpaper
                 HomeQuoteDefault = "在安静的线路上，等一朵云完成漫游",
                 HomeWallpaperImportFailed = "无法将壁纸复制到本地，已改用原始来源",
             ),
@@ -172,7 +172,7 @@ internal val ZhYumeStrings_AppSettings: YumeStrings_AppSettings =
                 PredictiveBackRestartSummary = "下次啟動應用後生效",
                 PredictiveBackProgressTitle = "預測返回幅度",
                 StatusBarSpacingTitle = "增加狀態欄間隔",
-                SystemWallpaperTitle = "設定為系統桌布",
+                SystemWallpaperTitle = "使用系統桌布", // KimiNoBox
                 HomeQuoteDefault = "在安靜的線路上，等一朵雲完成漫遊",
                 HomeWallpaperImportFailed = "無法將桌布複製到本機，已改用原始來源",
             ),
@@ -298,7 +298,7 @@ internal val EnYumeStrings_AppSettings: YumeStrings_AppSettings =
                 PredictiveBackRestartSummary = "Takes effect the next time the app starts",
                 PredictiveBackProgressTitle = "Predictive Back Amplitude",
                 StatusBarSpacingTitle = "Status bar spacing",
-                SystemWallpaperTitle = "Set as System Wallpaper",
+                SystemWallpaperTitle = "Use System Wallpaper", // KimiNoBox
                 HomeQuoteDefault = "Wait for a cloud to finish roaming on a quiet route",
                 HomeWallpaperImportFailed = "Could not copy the wallpaper locally; using the original source",
             ),
@@ -428,7 +428,7 @@ internal val JaYumeStrings_AppSettings: YumeStrings_AppSettings =
                 PredictiveBackRestartSummary = "次回アプリ起動時に有効になります",
                 PredictiveBackProgressTitle = "予測戻る振幅",
                 StatusBarSpacingTitle = "ステータスバーの間隔",
-                SystemWallpaperTitle = "システム壁紙に設定",
+                SystemWallpaperTitle = "システム壁紙を使用", // KimiNoBox
                 HomeQuoteDefault = "静かな回線のうえで、雲が回遊を終えるのを待つ",
                 HomeWallpaperImportFailed = "壁紙をローカルへコピーできなかったため、元のソースを使用します",
             ),
@@ -554,7 +554,7 @@ internal val RuYumeStrings_AppSettings: YumeStrings_AppSettings =
                 PredictiveBackRestartSummary = "Вступит в силу при следующем запуске приложения",
                 PredictiveBackProgressTitle = "Амплитуда возврата",
                 StatusBarSpacingTitle = "Отступ строки состояния",
-                SystemWallpaperTitle = "Установить системные обои",
+                SystemWallpaperTitle = "Использовать системные обои", // KimiNoBox
                 HomeQuoteDefault = "На тихом маршруте ждать, пока облако закончит роуминг",
                 HomeWallpaperImportFailed = "Не удалось скопировать обои локально; используется исходный источник",
             ),

@@ -153,8 +153,9 @@ internal fun HomePreviewGuideDialog(
                         )
                         TextButton(
                             text = YumeTxt.Home.PreviewGuide.Start,
-                            onClick = { if (accessGranted) onDismissRequest() },
-                            enabled = accessGranted,
+                            // KimiNoBox: the access is only needed while the system wallpaper is on
+                            onClick = { if (accessGranted || !useSystemWallpaper) onDismissRequest() },
+                            enabled = accessGranted || !useSystemWallpaper,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

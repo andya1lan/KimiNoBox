@@ -48,7 +48,7 @@ class AppSettingsStore(externalMmkv: MMKV) : MMKVPreference(externalMmkv = exter
     val bottomBarAutoHide by boolFlow(true)
     val topBarBlurEnabled by boolFlow(false)
     val classicHomeEnabled by boolFlow(false)
-    val useSystemWallpaper by boolFlow(true)
+    val useSystemWallpaper by boolFlow(false) // KimiNoBox: opt-in, since reading it needs all-files access
     val systemWallpaperPermissionRequested by boolFlow(false)
     val moeWallpaperUri by strFlow("")
     val moeWallpaperSourceUri by strFlow("")

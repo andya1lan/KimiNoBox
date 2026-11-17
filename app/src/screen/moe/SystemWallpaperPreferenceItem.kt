@@ -45,6 +45,7 @@ internal fun SystemWallpaperPreferenceItem(
 
     PreferenceSwitchItem(
         title = YumeTxt.AppSettings.Interface.SystemWallpaperTitle,
+        summary = ACCESS_SUMMARY, // KimiNoBox
         checked = checked,
         onCheckedChange = { enabled ->
             if (!enabled) {
@@ -60,3 +61,6 @@ internal fun SystemWallpaperPreferenceItem(
         },
     )
 }
+
+// KimiNoBox: Android 13+ lets only apps with all-files access read the real system wallpaper
+private const val ACCESS_SUMMARY = "需要「所有文件访问」，只用来读取系统壁纸"
